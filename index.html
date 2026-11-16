@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BTC Cycle Tracker — 비트코인 사이클 비교 분석</title>
+<meta name="description" content="Bitcoin halving-cycle tracker: overlays past cycles on today, measures price and time gaps, and projects the next top. 비트코인 반감기 사이클 비교·다음 고점 분석.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="BTC Cycle Tracker — Bitcoin halving-cycle analytics">
+<meta property="og:description" content="Which past cycle is today most like, how far apart in price and time, and where the next top could land.">
+<meta property="og:image" content="https://btccycle.github.io/og-image.png">
+<meta property="og:url" content="https://btccycle.github.io/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BTC Cycle Tracker">
+<meta name="twitter:description" content="Bitcoin halving-cycle analytics · live CoinGecko data">
+<meta name="twitter:image" content="https://btccycle.github.io/og-image.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233987e5'/%3E%3Cpath d='M8 22 L14 14 L18 18 L24 9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0e0e0d; --surface-1:#1a1a19; --surface-2:#222220; --line:#2e2e2b; --line-2:#3a3a36;
+  --text-primary:#f0efec; --text-secondary:#c3c2b7; --text-muted:#8f8e86;
+  --c4:#3987e5; --c3:#d95926; --c2:#199e70; --c1:#c98500; --comp:#a3a29a;
+  --good:#0ca30c; --bad:#e66767; --rec:#6e6d66;
+  --mono:'JetBrains Mono',ui-monospace,monospace; --sans:'IBM Plex Sans KR',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text-primary);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1240px;margin:0 auto;padding:20px 16px 60px}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:16px}
+.brand{display:flex;flex-direction:column;gap:4px}
+.brand .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--text-muted);text-transform:uppercase}
+.brand h1{margin:0;font-size:24px;font-weight:700;letter-spacing:-.01em}
+.brand h1 span{color:var(--c4)}
+.brand p{margin:0;color:var(--text-secondary);font-size:13px}
+.hright{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.lang{display:inline-flex;background:var(--surface-1);border:1px solid var(--line);border-radius:7px;padding:2px}
+.lang a{color:var(--text-secondary);text-decoration:none;font:600 11.5px var(--mono);padding:4px 10px;border-radius:5px;letter-spacing:.04em}
+.lang a.on{background:var(--surface-2);color:var(--text-primary);box-shadow:inset 0 0 0 1px var(--line-2)}
+.status{font-family:var(--mono);font-size:11.5px;color:var(--text-muted);text-align:right;line-height:1.6}
+.status b{color:var(--text-secondary);font-weight:500}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--good);margin-right:6px;vertical-align:1px}
+
+.phase{background:linear-gradient(180deg,#1d1d1b,#191918);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:18px;align-items:center}
+.phase .pk{font:500 11px var(--mono);letter-spacing:.12em;color:var(--text-muted);text-transform:uppercase}
+.phase .pv{font-size:17px;font-weight:700;margin:4px 0 4px}
+.phase .pv span{color:var(--c4)}
+.phase .ps{font-size:12px;color:var(--text-secondary);line-height:1.55}
+.ptrack{position:relative;height:30px;background:var(--bg);border-radius:6px;margin:16px 0 22px}
+.ptrack .fill{position:absolute;top:0;bottom:0;border-radius:6px 0 0 6px}
+.ptrack .band{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,rgba(12,163,12,.22) 0 6px,rgba(12,163,12,.08) 6px 12px);border-left:1px solid rgba(12,163,12,.6);border-right:1px solid rgba(12,163,12,.6)}
+.ptrack .mk{position:absolute;top:-6px;bottom:-6px;width:2px}
+.ptrack .ml{position:absolute;font:500 10.5px var(--mono);white-space:nowrap;transform:translateX(-50%)}
+.ptrack .ml.up{top:-19px}.ptrack .ml.dn{bottom:-19px}
+
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:4px}
+.kpi{background:var(--surface-1);border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0}
+.kpi .k{font-size:11.5px;color:var(--text-muted);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .v{font-family:var(--mono);font-size:21px;font-weight:600;letter-spacing:-.02em;white-space:nowrap}
+.kpi .s{font-family:var(--mono);font-size:11px;color:var(--text-secondary);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.neg{color:var(--bad)} .pos{color:var(--good)}
+
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;background:var(--surface-1);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;position:sticky;top:0;z-index:5}
+.ctl{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)}
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:2px}
+.seg button{background:none;border:0;color:var(--text-secondary);font:500 12px var(--sans);padding:5px 10px;border-radius:5px;cursor:pointer}
+.seg button.on{background:var(--surface-2);color:var(--text-primary);box-shadow:inset 0 0 0 1px var(--line-2)}
+select,input[type=number],input[type=date]{background:var(--bg);color:var(--text-primary);border:1px solid var(--line);border-radius:7px;padding:5px 8px;font:12px var(--mono)}
+label.tg{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text-secondary);font-size:12.5px}
+label.tg input{accent-color:var(--c4)}
+
+.grid2{display:grid;grid-template-columns:1.65fr 1fr;gap:14px;margin-bottom:14px}
+.grid2.even{grid-template-columns:1.15fr 1fr}
+.card{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;padding:14px 14px 12px;min-width:0}
+.card h2{margin:0 0 2px;font-size:14.5px;font-weight:600}
+.card .sub{font-size:12px;color:var(--text-muted);margin:0 0 10px;line-height:1.5}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0 0 8px;font-size:12px;color:var(--text-secondary)}
+.legend span{display:inline-flex;align-items:center;gap:6px;user-select:none}
+#legend1 span{cursor:pointer}
+.legend span.off{opacity:.38}
+.legend i{display:inline-block;width:16px;height:3px;border-radius:2px}
+.legend i.dash{background:repeating-linear-gradient(90deg,var(--comp) 0 4px,transparent 4px 7px)!important}
+.legend i.blk{width:12px;height:9px}
+.chartbox{position:relative;height:420px}
+.chartbox.sm{height:260px}
+.chartbox.md{height:330px}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+.tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+th,td{padding:8px 9px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:500;color:var(--text-muted);font-size:11.5px}
+th:first-child,td:first-child{text-align:left}
+td{font-family:var(--mono);color:var(--text-primary)}
+td.name{font-family:var(--sans);font-weight:500}
+td.fn{font-family:var(--sans);white-space:normal;text-align:left;font-size:11.5px;color:var(--text-muted)}
+tr.cur td{background:rgba(57,135,229,.07)}
+tr.avg td{color:var(--text-secondary)}
+.sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:0}
+.bar{position:relative;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;width:70px;display:inline-block;vertical-align:middle;margin-left:8px}
+.bar b{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
+.muted{color:var(--text-muted)}
+.small{font-size:10.5px}
+.note{font-size:12px;color:var(--text-secondary);line-height:1.65}
+.insight{border-left:3px solid var(--c4);background:var(--surface-2);padding:10px 12px;border-radius:0 8px 8px 0;font-size:13px;line-height:1.7;color:var(--text-secondary);margin-bottom:12px}
+.insight b{color:var(--text-primary);font-weight:600}
+
+.tl{display:flex;flex-direction:column;gap:12px;margin-top:6px}
+.tlrow{display:grid;grid-template-columns:86px 1fr;gap:10px;align-items:center;font-size:12px}
+.tlrow .lab{color:var(--text-secondary);font-weight:500;font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+.track{position:relative;height:22px;background:var(--bg);border-radius:5px}
+.seg2{position:absolute;top:3px;bottom:3px;border-radius:3px;display:flex;align-items:center;justify-content:center;font:500 10.5px var(--mono);color:#0e0e0d;overflow:hidden;white-space:nowrap}
+.seg2.acc,.seg2.rec{background:#4b4b46;color:var(--text-primary)}
+.seg2.bull{background:var(--good)}
+.seg2.bear{background:var(--bad)}
+.seg2.proj{background:transparent;border:1.5px dashed var(--text-muted);color:var(--text-secondary)}
+.seg2.projg{background:transparent;border:1.5px dashed var(--good);color:var(--text-secondary)}
+.tick{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--text-primary)}
+.tlaxis{position:relative;height:16px;margin-left:96px;font:10.5px var(--mono);color:var(--text-muted)}
+.tlaxis span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+#athAxis span:last-child{transform:translateX(-100%)}
+#athAxis span:first-child{transform:none}
+.zero{position:absolute;top:-4px;bottom:-4px;width:1px;background:var(--text-muted)}
+.todaymark{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--c4)}
+
+.datap{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:8px}
+.btn{background:var(--surface-2);border:1px solid var(--line-2);color:var(--text-primary);font:500 12px var(--sans);padding:6px 11px;border-radius:7px;cursor:pointer}
+.btn:hover{border-color:var(--text-muted)}
+details{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:14px}
+details summary{cursor:pointer;font-weight:600;font-size:14px}
+details .note p{margin:8px 0}
+code{font-family:var(--mono);font-size:11.5px;background:var(--bg);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--text-secondary)}
+footer{margin-top:22px;font-size:11.5px;color:var(--text-muted);line-height:1.7}
+footer a{color:var(--text-secondary)}
+.live{display:flex;align-items:center;gap:8px;font:500 11.5px var(--mono);color:var(--text-secondary);background:var(--surface-1);border:1px solid var(--line);border-radius:7px;padding:5px 10px;max-width:420px;text-align:right}
+.live .pulse{width:8px;height:8px;border-radius:50%;flex:none;background:var(--text-muted)}
+.live.on .pulse{background:var(--good);box-shadow:0 0 0 0 rgba(12,163,12,.6);animation:pl 2s infinite}
+.live.warn .pulse{background:#c98500}
+.live.off .pulse{background:var(--bad)}
+.live button{background:var(--c4);color:#fff;border:0;border-radius:5px;padding:3px 8px;font:600 11px var(--sans);cursor:pointer}
+@keyframes pl{0%{box-shadow:0 0 0 0 rgba(12,163,12,.55)}70%{box-shadow:0 0 0 7px rgba(12,163,12,0)}100%{box-shadow:0 0 0 0 rgba(12,163,12,0)}}
+.fc{background:linear-gradient(180deg,#1b1f26,#181a1d);border:1px solid #2c3442;border-radius:14px;padding:16px;margin-bottom:4px}
+.fc .pk{font:600 11px var(--mono);letter-spacing:.14em;color:#7fb0ef}
+.fc h2{margin:4px 0 2px;font-size:18px}
+.fc .sub{font-size:12px;color:var(--text-muted);line-height:1.5}
+.fcgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:14px;margin-top:12px}
+.fcl{display:flex;flex-direction:column;gap:10px}
+.ans{background:var(--surface-1);border:1px solid var(--line);border-radius:11px;padding:12px 14px}
+.ans .q{font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:8px}
+.ans .q b{display:inline-flex;width:18px;height:18px;border-radius:50%;background:#26354a;color:#9cc3f5;font:600 11px var(--mono);align-items:center;justify-content:center}
+.ans .a{font:600 26px var(--mono);letter-spacing:-.02em;margin:6px 0 4px;white-space:nowrap}
+.ans .a small{font:500 13px var(--sans);color:var(--text-secondary);margin-left:8px;letter-spacing:0}
+.ans .d{font-size:12.5px;color:var(--text-secondary);line-height:1.75}
+.ans .d b{color:var(--text-primary);font-family:var(--mono);font-weight:600}
+.fcr{background:var(--surface-1);border:1px solid var(--line);border-radius:11px;padding:12px 12px 6px;min-width:0}
+.disc{font-size:11.5px;color:var(--text-muted);margin:10px 2px 0;line-height:1.6}
+.xbtn{display:inline-flex;align-items:center;gap:6px;background:#f0efec;color:#0e0e0d;text-decoration:none;font:600 12px var(--sans);padding:5px 11px;border-radius:7px}
+.xbtn:hover{background:#fff}
+.secl{display:flex;align-items:baseline;gap:10px;margin:22px 2px 10px;flex-wrap:wrap}
+.secl span{font:600 11px var(--mono);color:#7fb0ef;letter-spacing:.1em}
+.secl b{font-size:16px;font-weight:700}
+.secl em{font-style:normal;font-size:12px;color:var(--text-muted)}
+.secl.big{border-top:1px solid var(--line);padding-top:22px;margin-top:30px}
+.nowgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:14px}
+.nowgrid .phase{margin:0;grid-template-columns:1fr;gap:6px;align-items:start}
+.nowcard{padding:16px}
+.nowcard .hd{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.nowcard .hd .big{font:700 22px var(--mono)}
+.nowcard .hd .tag{font:600 11px var(--mono);padding:3px 8px;border-radius:999px;background:#26354a;color:#9cc3f5}
+.nowlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.nowlist li{display:grid;grid-template-columns:64px 1fr;gap:10px;font-size:13px;line-height:1.55;color:var(--text-secondary)}
+.nowlist li>span{font:600 11px var(--mono);color:var(--text-muted);padding-top:2px}
+.nowlist b{color:var(--text-primary);font-family:var(--mono);font-weight:600}
+.nowcard .bottom{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;color:var(--text-secondary);line-height:1.6}
+details.more{background:transparent;border:0;padding:0;margin-top:12px}
+details.more summary{font-size:12.5px;font-weight:500;color:#9cc3f5;padding:6px 2px}
+.kpi:first-child{border-color:#2c3f5c;background:linear-gradient(180deg,#1b2433,#1a1a19)}
+.kpi .v{font-size:23px}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--surface-2);border:1px solid var(--line-2);padding:8px 14px;border-radius:8px;font-size:12.5px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+
+@media (max-width:1000px){.fcgrid,.nowgrid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(3,1fr)}.grid2,.grid2.even{grid-template-columns:1fr}.phase{grid-template-columns:1fr}}
+@media (max-width:560px){
+  .hm{display:none}
+  .kpis{grid-template-columns:repeat(2,1fr)}.kpi .v{font-size:18px}
+  .chartbox{height:340px}.brand h1{font-size:20px}.status{text-align:left}.hright{align-items:flex-start}
+  .controls{position:static}
+  .tlrow{grid-template-columns:70px 1fr}.tlaxis{margin-left:80px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="eyebrow">Bitcoin · Halving Cycle Analytics</div>
+      <h1>BTC <span>Cycle</span> Tracker</h1>
+      <p data-i18n="tagline"></p>
+    </div>
+    <div class="hright">
+      <div style="display:flex;gap:8px;align-items:center"><a class="xbtn" id="xShare" href="https://x.com/intent/tweet" target="_blank" rel="noopener">𝕏 <span id="xShareT">Share</span></a><nav class="lang"><a href="#ko" id="lk">한국어</a><a href="#en" id="le">EN</a></nav></div>
+      <div class="live" id="live"></div>
+      <div class="status" id="status"></div>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpis"></section>
+
+  <div class="secl"><span>01</span><b data-i18n="secNow"></b></div>
+  <section class="nowgrid">
+    <div class="card nowcard" id="nowAnalysis"></div>
+    <section class="phase" id="phase"></section>
+  </section>
+
+  <div class="secl"><span>02</span><b data-i18n="secFc"></b></div>
+  <section class="fc">
+    <div class="pk">ANALOG FORECAST</div>
+    <h2 id="fcTitle"></h2>
+    <p class="sub" id="fcSub" style="margin:0"></p>
+    <div class="fcgrid">
+      <div class="fcl"><div class="ans" id="ans1"></div><div class="ans" id="ans2"></div><div class="ans" id="ans3"></div></div>
+      <div class="fcr">
+        <div class="legend" id="legendFc"></div>
+        <div class="chartbox md"><canvas id="fcChart"></canvas></div>
+        <div class="tblwrap"><table id="fcTbl"></table></div>
+      </div>
+    </div>
+    <details class="more"><summary data-i18n="fcMore"></summary><div class="tblwrap" style="margin-top:8px"><table id="fcAll"></table></div></details>
+    <p class="disc" id="fcDisc"></p>
+  </section>
+
+  <div class="secl big"><span>03</span><b data-i18n="secDetail"></b><em data-i18n="secDetailSub"></em></div>
+  <div class="controls">
+    <div class="ctl"><span data-i18n="ctlAnchor"></span>
+      <div class="seg" id="anchorSeg">
+        <button data-v="halving" class="on" data-i18n="aHalving"></button>
+        <button data-v="prevBottom" data-i18n="aPrevBottom"></button>
+        <button data-v="top" data-i18n="aTop"></button>
+      </div>
+    </div>
+    <div class="ctl"><span data-i18n="ctlY"></span>
+      <div class="seg" id="ySeg">
+        <button data-v="mult" class="on" data-i18n="yMult"></button>
+        <button data-v="dd" data-i18n="yDd"></button>
+      </div>
+    </div>
+    <div class="ctl"><span data-i18n="ctlWin"></span>
+      <select id="winSel">
+        <option value="anchor" data-i18n="wAnchor"></option>
+        <option value="365" data-i18n="w365"></option>
+        <option value="180" data-i18n="w180"></option>
+        <option value="full" data-i18n="wFull"></option>
+      </select>
+    </div>
+    <label class="tg"><input type="checkbox" id="projTg" checked> <span data-i18n="tgProj"></span></label>
+    <label class="tg"><input type="checkbox" id="lagTg"> <span data-i18n="tgLag"></span></label>
+    <label class="tg"><input type="checkbox" id="ampTg"> <span data-i18n="tgAmp"></span></label>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2 data-i18n="hOverlay"></h2>
+      <p class="sub" id="overlaySub"></p>
+      <div class="legend" id="legend1"></div>
+      <div class="chartbox"><canvas id="overlay"></canvas></div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="hScore"></h2>
+      <p class="sub" id="scoreSub"></p>
+      <div class="insight" id="insight"></div>
+      <div class="tblwrap"><table id="scoreTbl"></table></div>
+    </div>
+  </div>
+
+  <div class="grid2 even">
+    <div class="card">
+      <h2 data-i18n="hUw"></h2>
+      <p class="sub" data-i18n="sUw"></p>
+      <div class="legend" id="legendUw"></div>
+      <div class="chartbox md"><canvas id="uw"></canvas></div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="hAth"></h2>
+      <p class="sub" data-i18n="sAth"></p>
+      <div class="tl" id="athBars"></div>
+      <div class="tlaxis" id="athAxis"></div>
+      <div class="legend" id="athLegend" style="margin-top:8px"></div>
+      <div class="insight" id="athInsight" style="margin:10px 0 0"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <h2 data-i18n="hAthTbl"></h2>
+    <p class="sub" data-i18n="sAthTbl"></p>
+    <div class="tblwrap"><table id="athTbl"></table></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <h2 data-i18n="hDiff"></h2>
+    <p class="sub" data-i18n="sDiff"></p>
+    <div class="tblwrap"><table id="diffTbl"></table></div>
+  </div>
+
+  <div class="grid2 even">
+    <div class="card">
+      <h2 data-i18n="hUsd"></h2>
+      <p class="sub" data-i18n="sUsd"></p>
+      <div class="legend" id="legend2"></div>
+      <div class="chartbox md"><canvas id="usd"></canvas></div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="hProj"></h2>
+      <p class="sub" id="projSub"></p>
+      <div class="tblwrap"><table id="projTbl"></table></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2 data-i18n="hRoll"></h2>
+      <p class="sub" data-i18n="sRoll"></p>
+      <div class="chartbox sm"><canvas id="rolling"></canvas></div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="hTl"></h2>
+      <p class="sub" data-i18n="sTl"></p>
+      <div class="tl" id="timeline"></div>
+      <div class="tlaxis" id="tlaxis"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="hMs"></h2>
+    <p class="sub" data-i18n="sMs"></p>
+    <div class="tblwrap"><table id="msTbl"></table></div>
+    <div class="insight" id="bottomBox" style="margin-top:12px;margin-bottom:0"></div>
+  </div>
+
+  <details>
+    <summary data-i18n="hData"></summary>
+    <div class="note">
+      <p id="dataInfo"></p>
+      <div class="datap">
+        <span class="muted" data-i18n="manualPx"></span>
+        <input type="date" id="pxDate">
+        <input type="number" id="pxVal" placeholder="USD" step="any" style="width:120px">
+        <button class="btn" id="pxBtn" data-i18n="apply"></button>
+      </div>
+      <div class="datap">
+        <span class="muted" data-i18n="csvLab"></span>
+        <input type="file" id="csvIn" accept=".csv,.txt" style="font-size:12px;color:var(--text-secondary)">
+        <button class="btn" id="resetBtn" data-i18n="reset"></button>
+      </div>
+      <p class="muted" data-i18n="csvHelp"></p>
+    </div>
+  </details>
+
+  <details>
+    <summary data-i18n="hMethod"></summary>
+    <div class="note" data-i18n="method"></div>
+  </details>
+
+  <footer id="foot"></footer>
+</div>
+<div id="toast"></div>
+
+<script>
+if(typeof window.Chart==='undefined'){ window.Chart=class{constructor(){this.data={};this.options={}}update(){}}; window.Chart.defaults={font:{},color:'',borderColor:''}; window.__NO_CHARTJS=true; }
+/* ============================== I18N ============================== */
+let LANG='ko';
+const K=(ko,en)=>LANG==='en'?en:ko;
+const I18N={
+ tagline:['과거 반감기 사이클을 현재 사이클에 겹쳐 가격·시간 괴리와 유사도를 정량 분석합니다.','Overlays past halving cycles on the current one and quantifies price gaps, time gaps and similarity.'],
+ secNow:['현재 분석 · 국면','Where we are now'], secFc:['다음 고점 전망','Next-top outlook'], secDetail:['상세 분석','Detailed analysis'], secDetailSub:['기준점·비교 구간을 바꿔가며 사이클을 자세히 비교합니다','Change the anchor and window to compare cycles in depth'], fcMore:['사이클별 투영 · 계산 방식 보기','Per-cycle projections · method'],
+ ctlAnchor:['기준점','Align by'], aHalving:['반감기','Halving'], aPrevBottom:['직전 바닥','Prior bottom'], aTop:['사이클 고점','Cycle top'],
+ ctlY:['Y축','Y-axis'], yMult:['기준점 대비 배수','Multiple of anchor'], yDd:['고점 대비','% of cycle top'],
+ ctlWin:['비교 구간','Window'], wAnchor:['기준점 → 현재','Anchor → today'], w365:['최근 365일','Last 365 days'], w180:['최근 180일','Last 180 days'], wFull:['전체 표시 구간','Full visible range'],
+ tgProj:['투영 경로','Projections'], tgLag:['시차 보정','Lag-adjusted'], tgAmp:['진폭(β) 보정','Amplitude (β) scaled'],
+ hOverlay:['사이클 오버레이','Cycle overlay'], hScore:['유사도 스코어보드','Similarity scoreboard'],
+ hUw:['고점 → 신고점: 수중 곡선','Top → new ATH: underwater curves'],
+ sUw:['각 사이클 고점 이후 가격이 고점 대비 몇 % 아래에 있었는지, 고점을 다시 넘을 때(0%)까지의 경로. ● 바닥 · ◆ 신고점 회복.','How far below its cycle top price stayed each day, until it reclaimed the top (0%). ● bottom · ◆ new ATH.'],
+ hAth:['고점 → 신고점 소요 기간','Time from top to a new all-time high'],
+ sAth:['사이클 고점(0일)부터 하락 · 회복 · 신고점 이후 다음 사이클 고점까지. 현재 행의 점선은 과거 평균을 적용한 예상 구간.','From each cycle top (day 0): decline, recovery, then the run to the next cycle top. Dashed segments on the current row apply past averages.'],
+ hAthTbl:['고점 → 신고점 상세','Top → new ATH, in detail'],
+ sAthTbl:['종가 기준. "신고점 회복"은 직전 사이클 고점 종가를 처음 넘어선 날입니다.','Daily-close basis. "New ATH" is the first day the close exceeded the prior cycle-top close.'],
+ hDiff:['정밀 괴리 분석 — 가격 · 시간','Precision gap analysis — price & time'],
+ sDiff:['같은 경과일에서의 로그 가격 차이(가격 괴리)와, 형태가 가장 잘 맞는 시간 이동량(시간 괴리)을 세 가지 방법으로 측정합니다.','Log-price gap at the same elapsed day (price gap) and the time shift that best aligns the shape (time gap), measured three ways.'],
+ hUsd:['USD 가격 투영','USD price projection'],
+ sUsd:['현재가에 각 과거 사이클의 "같은 위치 이후 경로 비율"을 곱한 가상 경로입니다. 예측이 아닌 역사적 유비(analog)입니다.','Today\'s price multiplied by each past cycle\'s path from the equivalent point. A historical analog, not a forecast.'],
+ hProj:['투영 가격표','Projection table'],
+ hRoll:['롤링 유사도 (180일 창 상관계수)','Rolling similarity (180-day correlation)'],
+ sRoll:['현재 사이클 경과일마다 직전 180일 구간의 로그 가격 경로가 과거 사이클과 얼마나 같이 움직였는지 보여줍니다. 1에 가까울수록 형태가 일치합니다.','For each day of the current cycle, how closely the trailing 180-day log-price path moved with each past cycle. Closer to 1 = closer shape match.'],
+ hTl:['국면 타임라인 (반감기 = 0일)','Phase timeline (halving = day 0)'],
+ sTl:['축적(직전 바닥→반감기) · 상승(반감기→고점) · 하락(고점→바닥) 구간의 길이 비교.','Lengths of accumulation (prior bottom→halving), bull (halving→top) and bear (top→bottom) phases.'],
+ hMs:['사이클 구조 비교','Cycle structure'],
+ sMs:['각 사이클의 핵심 변곡점 가격과 구간 길이. 현재 사이클의 바닥은 고점 이후 최저 종가 기준 <b>잠정치</b>입니다.','Key turning-point prices and phase lengths. The current cycle\'s bottom is <b>provisional</b> — the lowest close since the top.'],
+ hData:['데이터 관리 — 현재가 입력 · 일봉 CSV 불러오기','Data — set current price · import daily CSV'],
+ manualPx:['현재가 수동 입력','Set current price'], apply:['적용','Apply'], csvLab:['일봉 CSV','Daily CSV'], reset:['내장 데이터로 초기화','Reset to built-in data'],
+ csvHelp:['CSV는 날짜 열(<code>date</code>, <code>snapped_at</code>, <code>timestamp</code> 등)과 가격 열(<code>close</code>, <code>price</code>)을 자동 인식합니다. CoinGecko·Yahoo Finance·CoinMarketCap 내보내기 형식 그대로 사용할 수 있고, 불러온 기간은 내장 데이터를 대체합니다. 불러온 데이터는 이 브라우저에만 저장됩니다.','Date columns (<code>date</code>, <code>snapped_at</code>, <code>timestamp</code>…) and price columns (<code>close</code>, <code>price</code>) are detected automatically. CoinGecko, Yahoo Finance and CoinMarketCap exports work as-is; the imported range replaces built-in data. Imported data is stored in this browser only.'],
+ hMethod:['방법론 · 수식','Methodology & formulas'],
+ method:[`<p><b>정규화.</b> 각 사이클 c의 기준일 a<sub>c</sub>(반감기/직전 바닥/고점)로부터 x일 경과 시점의 값을 <code>L_c(x) = ln P(a_c + x) − ln P(a_c)</code>로 정의합니다. 모든 비교는 이 로그 배수 공간에서 이뤄지며, 차트의 배수는 <code>e^{L}</code>입니다.</p>
+<p><b>레벨 상관 r<sub>L</sub>.</b> 비교 구간에서 L<sub>now</sub>(x)와 L<sub>c</sub>(x)의 피어슨 상관. 추세가 같으면 높게 나오는 경향이 있어 단독으로 쓰지 않습니다.</p>
+<p><b>수익률 상관 r<sub>R</sub>.</b> 14일 로그 수익률을 7일 간격으로 샘플링한 계열 간 상관. 추세 효과를 제거한 형태 유사성 지표입니다.</p>
+<p><b>가격 괴리.</b> 편향 <code>b = mean(L_now − L_c)</code> → <code>e^b − 1</code>은 "같은 경과일에 현재가 과거 경로보다 몇 % 위/아래인가". RMSE <code>√mean((L_now − L_c)²)</code> → <code>e^{RMSE} − 1</code>은 평균적인 절대 괴리 폭.</p>
+<p><b>진폭비 β와 형태 오차.</b> 회귀 <code>L_now = α + β·L_c</code>의 기울기 β는 현재 사이클이 과거 움직임의 몇 배 진폭으로 움직이는지(수익 체감)이며, 잔차 RMSE를 형태 오차로 씁니다.</p>
+<p><b>시간 괴리 ① 최적 시차 τ.</b> 최근 365일 구간에서 과거 경로를 τ ∈ [−240, +240]일 이동시키며 <code>corr(L_now(x), L_c(x+τ))</code>를 최대화하는 τ. τ &gt; 0이면 오늘이 과거 사이클의 τ일 뒤 시점과 닮았다는 뜻으로 현재가 <b>앞서</b> 진행 중입니다.</p>
+<p><b>시간 괴리 ② DTW 대응점.</b> 주봉 샘플에 Dynamic Time Warping(z-점수 표준화, ±26주 밴드, 끝점 개방)을 적용해 오늘이 과거 사이클의 몇 번째 날에 대응하는지 찾습니다.</p>
+<p><b>시간 괴리 ③ 변곡점 시차.</b> 반감기→고점, 고점→바닥, 고점→신고점 일수를 과거와 직접 비교합니다.</p>
+<p><b>고점 → 신고점.</b> 사이클 고점 종가 P<sub>T</sub> 이후 <code>P(d) &gt; P_T</code>를 처음 만족하는 날을 신고점 회복일로 봅니다. 수중 곡선은 <code>P(T+x)/P_T − 1</code>. 현재 사이클의 예상 회복일은 ①과거 평균 소요일 ②소요일의 선형 추세 ③잠정 바닥 + 평균 바닥→회복 일수, 세 가지로 제시합니다.</p>
+<p><b>종합 유사도(0–100).</b> <code>100 × [0.35·max(0,r_R) + 0.25·max(0,r_L) + 0.20·e^{−RMSE_shape/0.10} + 0.20·e^{−DTW/0.35}]</code>.</p>
+<p><b>투영.</b> <code>P̂(t+h) = P_now × e^{k·[L_c(t+τ+h) − L_c(t+τ)]}</code> (τ: 시차 보정 시 최적 시차, 아니면 0 · k: 진폭 보정 시 β(0.05–2로 제한), 아니면 1).</p>
+<p><b>한계.</b> 표본은 사이클 3개뿐이며, ETF·거시 유동성 등 구조 변화로 수익률은 사이클마다 체감해 왔습니다. 수치는 역사적 비교용이며 투자 조언이 아닙니다.</p>`,
+`<p><b>Normalization.</b> For cycle c with anchor a<sub>c</sub> (halving / prior bottom / top), the value x days later is <code>L_c(x) = ln P(a_c + x) − ln P(a_c)</code>. All comparisons happen in this log-multiple space; chart multiples are <code>e^{L}</code>.</p>
+<p><b>Level correlation r<sub>L</sub>.</b> Pearson correlation of L<sub>now</sub>(x) and L<sub>c</sub>(x) over the window. Shared trend inflates it, so it is never used alone.</p>
+<p><b>Return correlation r<sub>R</sub>.</b> Correlation of 14-day log returns sampled every 7 days — a detrended shape-similarity measure.</p>
+<p><b>Price gap.</b> Bias <code>b = mean(L_now − L_c)</code> → <code>e^b − 1</code> = how far above/below the past path the current cycle sits at the same elapsed day. RMSE <code>√mean((L_now − L_c)²)</code> → <code>e^{RMSE} − 1</code> = typical absolute gap.</p>
+<p><b>Amplitude ratio β and shape error.</b> In the regression <code>L_now = α + β·L_c</code>, β is how large the current cycle's moves are relative to the past cycle (diminishing returns); the residual RMSE is the shape error.</p>
+<p><b>Time gap ① optimal lag τ.</b> Over the last 365 days, shift the past path by τ ∈ [−240, +240] days and pick the τ that maximizes <code>corr(L_now(x), L_c(x+τ))</code>. τ &gt; 0 means today resembles a later point of the past cycle — the current cycle is running <b>ahead</b>.</p>
+<p><b>Time gap ② DTW match.</b> Dynamic Time Warping on weekly samples (z-scored, ±26-week band, open end) finds which day of the past cycle today corresponds to.</p>
+<p><b>Time gap ③ turning-point lag.</b> Direct comparison of halving→top, top→bottom and top→new-ATH durations.</p>
+<p><b>Top → new ATH.</b> The reclaim date is the first day after the cycle-top close P<sub>T</sub> with <code>P(d) &gt; P_T</code>. The underwater curve is <code>P(T+x)/P_T − 1</code>. For the current cycle, the expected reclaim date is shown three ways: ① past average duration, ② linear trend of durations, ③ provisional bottom + average bottom→reclaim days.</p>
+<p><b>Overall similarity (0–100).</b> <code>100 × [0.35·max(0,r_R) + 0.25·max(0,r_L) + 0.20·e^{−RMSE_shape/0.10} + 0.20·e^{−DTW/0.35}]</code>.</p>
+<p><b>Projection.</b> <code>P̂(t+h) = P_now × e^{k·[L_c(t+τ+h) − L_c(t+τ)]}</code> (τ: optimal lag when lag-adjusted, else 0 · k: β clipped to 0.05–2 when amplitude-scaled, else 1).</p>
+<p><b>Limits.</b> Only three past cycles; returns have diminished each cycle amid structural change (ETFs, macro liquidity). Figures are historical comparisons, not investment advice.</p>`]
+};
+function applyStatic(){
+  document.documentElement.lang=LANG;
+  document.title = K('BTC Cycle Tracker — 비트코인 사이클 비교 분석','BTC Cycle Tracker — Bitcoin halving-cycle analytics');
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ const v=I18N[el.dataset.i18n]; if(v) el.innerHTML=v[LANG==='en'?1:0]; });
+  document.getElementById('lk').classList.toggle('on',LANG==='ko'); document.getElementById('le').classList.toggle('on',LANG==='en');
+}
+
+/* ============================== DATA ============================== */
+const MONTHLY = {
+ 2010:[null,null,null,null,null,null,null,null,null,null,null,0.30],
+ 2011:[0.52,0.86,0.78,3.50,8.70,16.10,13.40,8.20,5.10,3.25,2.97,4.72],
+ 2012:[5.5,4.9,4.9,5.0,5.2,6.7,9.3,10.2,12.4,11.2,12.6,13.5],
+ 2013:[20.4,33.4,93,139,129,97,106,135,133,204,1129,732],
+ 2014:[829,573,457,448,627,640,586,481,387,338,378,320],
+ 2015:[217,254,244,236,230,263,284,230,236,314,377,430],
+ 2016:[368,437,416,448,531,673,624,573,609,698,742,964],
+ 2017:[970,1190,1080,1348,2300,2480,2875,4703,4338,6468,10233,14156],
+ 2018:[10221,10397,6973,9240,7494,6404,7780,7037,6625,6318,4017,3742],
+ 2019:[3457,3854,4105,5350,8574,10817,10085,9631,8293,9199,7569,7193],
+ 2020:[9350,8599,6438,8658,9461,9137,11323,11680,10784,13781,19713,29001],
+ 2021:[33114,45137,58918,57750,37332,35041,41626,47166,43790,61318,57005,46306],
+ 2022:[38483,43193,45538,37714,31792,19785,23336,20050,19431,20495,17168,16547],
+ 2023:[23139,23147,28478,29268,27219,30477,29230,25931,26967,34667,37713,42265],
+ 2024:[42582,61198,71333,60636,67491,62678,64619,58969,63329,70215,96449,93429],
+ 2025:[102405,84374,82549,94207,104638,107135,115758,108236,114056,109556,90394,87500],
+ 2026:[78741,66973,68308,76324,73663,58652,62872,78558,83585,77582,null,null]
+};
+const PIVOTS = [
+ ["2011-06-08",29.6],["2011-11-18",2.05],["2012-11-28",12.35],["2013-04-09",230],["2013-12-04",1151],
+ ["2015-01-14",178.1],["2016-07-09",650.6],["2017-02-22",1126],["2017-02-23",1172],["2017-12-16",19497],["2018-12-15",3236.8],
+ ["2019-06-26",12932],["2020-03-12",4970.8],["2020-05-11",8601.8],["2020-11-29",18178],["2020-11-30",19626],["2021-04-13",63503],
+ ["2021-07-20",29807],["2021-11-08",67567],["2022-06-18",20553],["2022-11-21",15787],
+ ["2024-03-03",63114],["2024-03-04",68330],["2024-03-13",73083],["2024-04-20",64927],["2024-08-05",54022],["2024-12-17",106140],
+ ["2025-04-08",76272],["2025-08-13",123344],["2025-10-06",124753],["2025-11-21",85090],
+ ["2026-01-14",96900],["2026-11-05",75594],["2026-11-09",74549],["2026-11-10",74261],
+ ["2026-11-11",73938]
+];
+const CYCLES = [
+ {id:'c1',yr:'2012',color:'#c98500',halving:'2012-11-28',prevBottom:'2011-11-18',top:'2013-12-04',bottom:'2015-01-14'},
+ {id:'c2',yr:'2016',color:'#199e70',halving:'2016-07-09',prevBottom:'2015-01-14',top:'2017-12-16',bottom:'2018-12-15'},
+ {id:'c3',yr:'2020',color:'#d95926',halving:'2020-05-11',prevBottom:'2018-12-15',top:'2021-11-08',bottom:'2022-11-21'},
+ {id:'c4',yr:'2024',color:'#3987e5',halving:'2024-04-20',prevBottom:'2022-11-21',top:null,bottom:null,current:true}
+];
+const NEXT_HALVING_EST = '2028-04-15';
+// CoinGecko get-coin-market-chart snapshot (id=bitcoin; days=365/90/7), taken 2026-11-15 — fallback when the live API is unreachable
+const CG_SNAPSHOT = {"d365":{"startTs":1763251200000,"endTs":1794752830000,"prices":[95380,92903,85088,88256,91324,90360,93429,89227,91987,90253,87720,88092,88490,87192,87867,87575,90614,93650,90552,91201,95593,93344,89454,86625,89212,78647,75628,70273,70175,66259,68779,66427,68026,64074,65891,68816,70868,66043,70417,72934,71220,68424,70529,66330,66691,66888,69002,70645,73022,74297,77126,75858,78275,77367,76297,78512,81437,80678,80482,79069,76959,77550,77016,74340,73820,66727,60960,61670,63532,66293,62897,63255,60990,59953,58566,62554,64001,63193,63747,64717,64796,66521,64318,63882,62820,63465,64263,64856,63409,63031,64686,78318,78974,80268,77658,77297,79822,78283,77262,75590,80874,86597,84378,84449,83576,84743,85540,82564,81795,82156,82020,84082,80049,81274,77521,77385,75775,75267,71372,65197]},"d90":{"startTs":1786996800000,"endTs":1794771080000,"prices":[64241,64166,64250,69679,72643,77342,77181,77065,77394,79458,79157,79069,78706,80329,79292,77513,78157,79316,78670,78698,77241,77155,77700,81056,79671,80045,79912,79750,79093,78511,79586,78405,76879,77037,77317,77099,76767,78986,76548,75699,76320,76533,80014,81286,80276,81071,85822,86180,86528,84226,84393,84569,83927,84142,84443,82630,83038,83583,84296,83936,86620,84543,84856,85293,85751,85771,85722,83713,82638,81686,82374,82745,83093,83869,82365,83278,83370,81564,82309,81961,81626,81594,80814,82202,81448,82727,84627,81810,81670,80908,80348,80557,80449,79704,80825,80451,80203,78147,76872,77554,77983,78334,76781,77573,78405,80354,76006,75694,75922,75727,75191,74609,74312,73551,74002,71690,69507,67133,62612,64937]},"d7":{"startTs":1794168000000,"endTs":1794770510000,"prices":[75849,75687,74406,74740,75092,75195,74781,74415,74256,74482,74217,74316,74847,74659,75465,75007,74609,74803,74804,75182,75267,75004,74792,74479,74740,74566,74635,74448,74338,74312,73704,73210,72840,73416,73390,73704,73625,73721,73528,73569,73695,73860,73551,73658,73716,73949,73826,73739,73935,74218,74444,74338,74612,73849,73974,73618,73726,73723,73520,73447,73515,73418,72856,72826,72430,71617,71695,71690,71626,71388,71341,71372,70887,70188,68891,68062,69030,68653,69041,69287,69142,69507,68807,68640,68931,68994,68823,68208,68314,68234,67622,66691,67160,67327,66942,67363,67218,66955,66787,65673,65287,65518,65722,64832,63500,64120,62612,64899,64794,64506,64438,65073,65321,65345,65467,65425,64719,64676,64689,64968]},"asOf":1794770510000};
+const COMP_COLOR = '#a3a29a';
+const cname = c => `Cycle ${c.id.slice(1)}`;
+
+/* ============================== UTIL ============================== */
+const DAY=864e5;
+const dn = s => { const [y,m,d]=s.slice(0,10).split('-').map(Number); return Math.round(Date.UTC(y,m-1,d)/DAY); };
+const ds = n => new Date(n*DAY).toISOString().slice(0,10);
+const ln = Math.log, ex = Math.exp;
+const fmtUSD = v => !isFinite(v)?'—':(v<10?'$'+v.toFixed(2):v<1000?'$'+v.toFixed(1):'$'+Math.round(v).toLocaleString('en-US'));
+const fmtK = v => v>=1000?'$'+(v/1000).toFixed(v>=100000?0:1)+'k':fmtUSD(v);
+const pct = (v,d=1) => !isFinite(v)?'—':(v>0?'+':'')+(v*100).toFixed(d)+'%';
+const sgn = (v,d=0,u='') => !isFinite(v)?'—':(v>0?'+':v<0?'−':'±')+Math.abs(v).toFixed(d)+u;
+const dU = () => K('일','d');
+const cls = v => v>0?'pos':v<0?'neg':'';
+function pearson(a,b){const n=a.length;if(n<3)return NaN;let ma=0,mb=0;for(let i=0;i<n;i++){ma+=a[i];mb+=b[i]}ma/=n;mb/=n;let sab=0,saa=0,sbb=0;for(let i=0;i<n;i++){const da=a[i]-ma,db=b[i]-mb;sab+=da*db;saa+=da*da;sbb+=db*db}return sab/Math.sqrt(saa*sbb)}
+const mean = a => a.reduce((s,v)=>s+v,0)/a.length;
+const std = a => {const m=mean(a);return Math.sqrt(mean(a.map(v=>(v-m)**2)))};
+function linfit(ys){ const xs=ys.map((_,i)=>i+1), mx=mean(xs), my=mean(ys); const sl=xs.reduce((s,x,i)=>s+(x-mx)*(ys[i]-my),0)/xs.reduce((s,x)=>s+(x-mx)**2,0); return x=>my+sl*(x-mx); }
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.style.opacity=1;clearTimeout(toast._t);toast._t=setTimeout(()=>el.style.opacity=0,2200)}
+const LS = { get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}, del(k){try{localStorage.removeItem(k)}catch(e){}} };
+
+/* ============================== SERIES ============================== */
+let S=null;
+function embeddedPoints(){
+  const pts=[];
+  for(const y in MONTHLY) MONTHLY[y].forEach((v,i)=>{ if(v!=null) pts.push([Math.round(Date.UTC(+y,i+1,0)/DAY),v,1]); });
+  PIVOTS.forEach(([d,v])=>pts.push([dn(d),v,2]));
+  return pts;
+}
+function buildSeries(){
+  let pts=embeddedPoints();
+  // CoinGecko closes [day, close, errMs]: embedded points count as err=6h; on the same day the smaller error wins
+  const cg=cgCloses(); const EMB_ERR=6*3600e3;
+  const byDay=new Map(); pts.forEach(p=>byDay.set(p[0],{p,err:EMB_ERR}));
+  cg.forEach(([d,v,e])=>{ const cur=byDay.get(d); if(!cur||e<cur.err) byDay.set(d,{p:[d,v,3],err:e}); });
+  pts=[...byDay.values()].map(o=>o.p);
+  const imp=LS.get('btcct_import');
+  if(imp&&imp.length){ const lo=imp[0][0], hi=imp[imp.length-1][0]; pts=pts.filter(p=>p[0]<lo||p[0]>hi).concat(imp.map(p=>[p[0],p[1],4])); }
+  const man=LS.get('btcct_manual'); if(man) pts.push([man[0],man[1],5]);
+  pts.sort((a,b)=>a[0]-b[0]||a[2]-b[2]);
+  const m=new Map(); pts.forEach(p=>m.set(p[0],p));
+  const P=[...m.values()].sort((a,b)=>a[0]-b[0]);
+  const d0=P[0][0], d1=P[P.length-1][0], n=d1-d0+1;
+  const arr=new Float64Array(n).fill(NaN), real=new Uint8Array(n);
+  for(let i=0;i<P.length;i++){ const [da,va]=P[i]; arr[da-d0]=va; real[da-d0]=1;
+    if(i<P.length-1){ const [db,vb]=P[i+1]; const la=ln(va), lb=ln(vb); for(let d=da+1;d<db;d++) arr[d-d0]=ex(la+(lb-la)*(d-da)/(db-da)); } }
+  S={d0,d1,arr,real,nImported:imp?imp.length:0,manual:man,nCg:cg.length,cgRange:cg.length?[cg[0][0],cg[cg.length-1][0]]:null,cgLive:!!LS.get('btcct_cg2')};
+}
+const price = d => (d>=S.d0&&d<=S.d1)?S.arr[d-S.d0]:NaN;
+
+/* ============================== CYCLE MODEL ============================== */
+const st={anchor:'halving',ymode:'mult',win:'anchor',proj:true,lag:false,amp:false,hidden:new Set()};
+let CY=[];
+function resolveCycles(){
+  CY=CYCLES.map(c=>({...c,H:dn(c.halving),B0:dn(c.prevBottom),T:c.top?dn(c.top):null,B1:c.bottom?dn(c.bottom):null}));
+  const cur=CY[3]; let mx=-1,mi=Infinity,T=null,B=null;
+  for(let d=cur.H;d<=S.d1;d++){const p=price(d); if(p>mx){mx=p;T=d}}
+  for(let d=T;d<=S.d1;d++){const p=price(d); if(p<mi){mi=p;B=d}}
+  cur.T=T; cur.B1=B; cur.provisional=true;
+  CY.forEach((c,i)=>{ const nx=CY[i+1]; c.next=nx?{H:nx.H,B0:nx.B0,T:nx.T}:null;
+    // first close above cycle-top close = new ATH reclaim
+    const pt=price(c.T); c.R=null; for(let d=c.T+1; d<=S.d1; d++){ if(price(d)>pt){c.R=d;break} } });
+}
+function anchorDay(c,mode){ return mode==='halving'?c.H:mode==='prevBottom'?c.B0:c.T; }
+function maxX(c,mode){ if(c.current) return S.d1-anchorDay(c,mode); return anchorDay(c.next,mode)-anchorDay(c,mode); }
+function L(c,x,mode=st.anchor){ const a=anchorDay(c,mode); if(x>maxX(c,mode)) return NaN; const p=price(a+x),p0=price(a); return (isFinite(p)&&isFinite(p0))?ln(p)-ln(p0):NaN; }
+const Lraw=(c,x,mode=st.anchor)=>{ const a=anchorDay(c,mode); const p=price(a+x),p0=price(a); return (isFinite(p)&&isFinite(p0))?ln(p)-ln(p0):NaN; };
+const ANAME=()=>({halving:K('반감기','halving'),prevBottom:K('직전 바닥','prior bottom'),top:K('사이클 고점','cycle top')});
+function gridRange(){ const t=maxX(CY[3],st.anchor); const base=st.anchor==='halving'?[-560,1460]:st.anchor==='prevBottom'?[-90,1600]:[-600,1420]; return {t,x0:base[0],x1:Math.max(base[1],t+400)}; }
+
+/* ============================== METRICS ============================== */
+function winStart(t,x0){ return st.win==='anchor'?Math.max(0,x0):st.win==='full'?x0:t-(+st.win); }
+function computeMetrics(){
+  const cur=CY[3], {t,x0}=gridRange(), xs=winStart(t,x0), out=[];
+  for(const c of CY.slice(0,3)){
+    const a=[],b=[]; for(let x=xs;x<=t;x++){const u=L(cur,x),v=Lraw(c,x); if(isFinite(u)&&isFinite(v)){a.push(u);b.push(v)}}
+    const rL=pearson(a,b);
+    const ra=[],rb=[]; for(let x=xs+14;x<=t;x+=7){const u=L(cur,x)-L(cur,x-14),v=Lraw(c,x)-Lraw(c,x-14); if(isFinite(u)&&isFinite(v)){ra.push(u);rb.push(v)}}
+    const rR=pearson(ra,rb);
+    const diff=a.map((u,i)=>u-b[i]); const bias=mean(diff), rmse=Math.sqrt(mean(diff.map(d=>d*d)));
+    const mu=mean(a),mv=mean(b); let sxy=0,sxx=0; for(let i=0;i<a.length;i++){sxy+=(a[i]-mu)*(b[i]-mv);sxx+=(b[i]-mv)**2}
+    const beta=sxx>0?sxy/sxx:NaN, alpha=mu-beta*mv; const rmseShape=Math.sqrt(mean(a.map((u,i)=>(u-alpha-beta*b[i])**2)));
+    const ls=Math.max(xs,t-365); let best={tau:0,r:-2};
+    for(let tau=-240;tau<=240;tau+=2){const u1=[],v1=[]; for(let x=ls;x<=t;x+=2){const u=L(cur,x),v=Lraw(c,x+tau); if(isFinite(u)&&isFinite(v)){u1.push(u);v1.push(v)}} if(u1.length<30) continue; const r=pearson(u1,v1); if(r>best.r) best={tau,r};}
+    const dtw=dtwOpen(cur,c,xs,t);
+    const score=100*(0.35*Math.max(0,rR||0)+0.25*Math.max(0,rL||0)+0.20*ex(-rmseShape/0.10)+0.20*ex(-dtw.dist/0.35));
+    out.push({c,rL,rR,bias,rmse,rmseShape,beta,lag:best.tau,lagR:best.r,dtw,score,n:a.length,xs,t});
+  }
+  return out;
+}
+function dtwOpen(cur,c,xs,t){
+  const step=7,band=26,A=[],B=[]; for(let x=xs;x<=t;x+=step) A.push(L(cur,x));
+  const bN=Math.floor((t-xs)/step)+band+1; for(let j=0;j<bN;j++) B.push(Lraw(c,xs+j*step));
+  const n=A.length; if(n<6) return {dist:NaN,lag:NaN,matchX:NaN};
+  const Bo=B.slice(0,n).filter(isFinite); const mA=mean(A),sA=std(A)||1,mB=mean(Bo),sB=std(Bo)||1;
+  const a=A.map(v=>(v-mA)/sA), b=B.map(v=>isFinite(v)?(v-mB)/sB:NaN), m=b.length, INF=1e9;
+  const D=Array.from({length:n},()=>new Float64Array(m).fill(INF)), Lp=Array.from({length:n},()=>new Uint16Array(m));
+  for(let i=0;i<n;i++){ for(let j=Math.max(0,i-band);j<=Math.min(m-1,i+band);j++){
+    if(!isFinite(b[j])) continue; const cost=Math.abs(a[i]-b[j]);
+    if(i===0&&j===0){D[0][0]=cost;Lp[0][0]=1;continue}
+    let bv=INF,bl=0;
+    if(i>0&&D[i-1][j]<bv){bv=D[i-1][j];bl=Lp[i-1][j]}
+    if(j>0&&D[i][j-1]<bv){bv=D[i][j-1];bl=Lp[i][j-1]}
+    if(i>0&&j>0&&D[i-1][j-1]<=bv){bv=D[i-1][j-1];bl=Lp[i-1][j-1]}
+    if(bv<INF){D[i][j]=bv+cost;Lp[i][j]=bl+1}
+  }}
+  let bj=-1,bd=INF; for(let j=0;j<m;j++){ if(D[n-1][j]<INF){ const v=D[n-1][j]/Lp[n-1][j]; if(v<bd){bd=v;bj=j} } }
+  return {dist:bd,lag:(bj-(n-1))*step,matchX:xs+bj*step};
+}
+function projections(M){
+  const t=M[0].t, now=price(S.d1), H=[30,90,180,365];
+  const rows=M.map(m=>{ const tau=st.lag?m.lag:0, c=m.c, base=Lraw(c,t+tau), k=st.amp?Math.max(0.05,Math.min(2,m.beta)):1;
+    const f=h=>k*(Lraw(c,t+tau+h)-base);
+    const hz=H.map(h=>{const v=f(h); return isFinite(v)?now*ex(v):NaN});
+    let mn=Infinity,mx=null; for(let h=0;h<=600;h++){const v=f(h); if(isFinite(v)&&v<mn){mn=v;mx=h}}
+    return {m,hz,bot:(mx!=null&&mx>0)?{p:now*ex(mn),h:mx}:{p:now,h:0},tau,k,f}; });
+  const comp=H.map((h,i)=>{const ls=rows.map(r=>r.hz[i]).filter(isFinite).map(ln); return ls.length?ex(mean(ls)):NaN});
+  let cm=Infinity,ch=0; for(let h=0;h<=600;h++){const ls=rows.map(r=>r.f(h)).filter(isFinite); if(ls.length===rows.length){const v=mean(ls); if(v<cm){cm=v;ch=h}}}
+  return {rows,comp,compBot:{p:now*ex(Math.min(cm,0)),h:cm<0?ch:0},H,now};
+}
+function athStats(){
+  const past=CY.slice(0,3), cur=CY[3];
+  const rec=past.map(c=>({c,tb:c.B1-c.T,br:c.R-c.B1,tr:c.R-c.T,tt:c.next.T-c.T,rh:c.R-c.next.H,dd:price(c.B1)/price(c.T)-1}));
+  const avg=k=>mean(rec.map(r=>r[k]));
+  const trendTR=linfit(rec.map(r=>r.tr))(4);
+  const el=S.d1-cur.T, curDd=price(S.d1)/price(cur.T)-1;
+  const est={avg:cur.T+Math.round(avg('tr')), trend:cur.T+Math.round(trendTR), bot:cur.B1+Math.round(avg('br')), nextTop:cur.T+Math.round(avg('tt'))};
+  return {rec,avg,trendTR,el,curDd,est,minTR:Math.min(...rec.map(r=>r.tr)),maxTR:Math.max(...rec.map(r=>r.tr)),reclaimed:cur.R!=null};
+}
+
+/* ============================== CHARTS ============================== */
+Chart.defaults.font.family="'JetBrains Mono', monospace"; Chart.defaults.font.size=11;
+Chart.defaults.color='#8f8e86'; Chart.defaults.borderColor='#2e2e2b';
+const markerPlugin={id:'markers',afterDatasetsDraw(chart,args,o){
+  const {ctx,chartArea:{top,bottom,left,right},scales:{x,y}}=chart;
+  (o.vlines||[]).forEach(v=>{const px=x.getPixelForValue(v.x); if(px<left-1||px>right+1) return;
+    ctx.save();ctx.strokeStyle=v.color;ctx.lineWidth=v.w||1;ctx.setLineDash(v.dash||[4,4]);ctx.beginPath();ctx.moveTo(px,top);ctx.lineTo(px,bottom);ctx.stroke();ctx.setLineDash([]);
+    if(v.label){ctx.font='500 10.5px JetBrains Mono';const w=ctx.measureText(v.label).width;let lx=px+5; if(lx+w>right) lx=px-w-5; const ly=v.bottom?bottom-18-(v.row||0)*15:top+3+(v.row||0)*15; ctx.fillStyle='#1a1a19';ctx.fillRect(lx-3,ly,w+6,14);ctx.fillStyle=v.color;ctx.fillText(v.label,lx,ly+11)}
+    ctx.restore();});
+  (o.hlines||[]).forEach(h=>{ const py=y.getPixelForValue(h.y); if(py<top||py>bottom) return; ctx.save(); ctx.strokeStyle=h.color; ctx.setLineDash(h.dash||[3,4]); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(left,py); ctx.lineTo(right,py); ctx.stroke(); ctx.setLineDash([]);
+    if(h.label){ ctx.font='500 10.5px JetBrains Mono'; const w=ctx.measureText(h.label).width; ctx.fillStyle='#1a1a19'; ctx.fillRect(left+4,py-15,w+6,13); ctx.fillStyle=h.color; ctx.fillText(h.label,left+7,py-5); } ctx.restore(); });
+  (o.points||[]).forEach(p=>{ if(!isFinite(p.y)) return; const px=x.getPixelForValue(p.x), py=y.getPixelForValue(p.y); if(px<left-2||px>right+2||py<top-2||py>bottom+2) return;
+    ctx.save();ctx.beginPath(); if(p.shape==='d'){ctx.moveTo(px,py-6);ctx.lineTo(px+6,py);ctx.lineTo(px,py+6);ctx.lineTo(px-6,py);ctx.closePath()} else ctx.arc(px,py,5,0,7);
+    ctx.fillStyle=p.color;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='#1a1a19';ctx.stroke();
+    if(p.shape==='v'){ctx.beginPath();ctx.arc(px,py,2,0,7);ctx.fillStyle='#1a1a19';ctx.fill()}
+    ctx.restore();});
+}};
+function pow2Ticks(axis){ const lo=Math.floor(Math.log2(axis.min)),hi=Math.ceil(Math.log2(axis.max)),stepK=(hi-lo)>12?2:1; axis.ticks=[]; for(let k=lo;k<=hi;k+=stepK){const v=2**k; if(v>=axis.min*0.999&&v<=axis.max*1.001) axis.ticks.push({value:v})} }
+const baseOpts=()=>({responsive:true,maintainAspectRatio:false,animation:false,parsing:false,normalized:true,
+  interaction:{mode:'index',intersect:false},
+  plugins:{legend:{display:false},tooltip:{backgroundColor:'#222220',borderColor:'#3a3a36',borderWidth:1,titleColor:'#f0efec',bodyColor:'#c3c2b7',padding:10,boxWidth:8,boxHeight:8,usePointStyle:true,filter:i=>i.raw&&isFinite(i.raw.y)}},
+  elements:{point:{radius:0,hitRadius:6,hoverRadius:4},line:{borderWidth:1.6,tension:0}},
+  scales:{x:{type:'linear',grid:{color:'#262624'},ticks:{maxRotation:0}},y:{grid:{color:'#262624'}}}});
+const CH={};
+function upsert(id,sets,o){ if(CH[id]){CH[id].data.datasets=sets;CH[id].options=o;CH[id].update()} else CH[id]=new Chart(document.getElementById(id),{type:'line',data:{datasets:sets},options:o,plugins:[markerPlugin]}); }
+const dsx=(c,x)=>ds(anchorDay(c,st.anchor)+x);
+const Dlab=x=>'D'+(x>0?'+':x<0?'':' ')+x;
+
+function drawOverlay(PJ){
+  const {t,x0,x1}=gridRange(), step=2, cur=CY[3];
+  const topNorm=c=>ln(price(c.T))-ln(price(anchorDay(c,st.anchor)));
+  const tr=(c,v)=>st.ymode==='mult'?ex(v):ex(v-topNorm(c));
+  const xsArr=[]; for(let x=x0;x<=x1;x+=step) xsArr.push(x);
+  const sets=[];
+  CY.slice(0,3).forEach(c=>{ if(st.hidden.has(c.id)) return; sets.push({label:`${cname(c)} (${c.yr})`,data:xsArr.map(x=>{const v=L(c,x);return {x,y:isFinite(v)?tr(c,v):NaN}}),borderColor:c.color,backgroundColor:c.color,cid:c.id}); });
+  if(!st.hidden.has('comp')) sets.push({label:K('과거 평균(기하)','Past avg (geo)'),data:xsArr.map(x=>{const ls=CY.slice(0,3).map(c=>{const v=L(c,x);return st.ymode==='mult'?v:v-topNorm(c)}).filter(isFinite);return {x,y:ls.length===3?ex(mean(ls)):NaN}}),borderColor:COMP_COLOR,backgroundColor:COMP_COLOR,borderDash:[5,4],borderWidth:1.4});
+  if(st.proj) PJ.rows.forEach(r=>{ const c=r.m.c; if(st.hidden.has(c.id)) return; const now=L(cur,t);
+    sets.push({label:`${cname(c)} ${K('투영','proj.')}`,data:xsArr.map(x=>{ if(x<t||x>t+540) return {x,y:NaN}; const v=r.f(x-t); return {x,y:isFinite(v)?tr(cur,now+v):NaN}; }),borderColor:c.color+'99',backgroundColor:c.color,borderDash:[2,3],borderWidth:1.2}); });
+  if(!st.hidden.has('c4')) sets.push({label:`${cname(cur)} (${K('현재','now')})`,data:xsArr.map(x=>{const v=L(cur,x);return {x,y:isFinite(v)?tr(cur,v):NaN}}),borderColor:cur.color,backgroundColor:cur.color,borderWidth:2.6,cid:'c4'});
+  const pts=[]; CY.forEach(c=>{ if(st.hidden.has(c.id)) return; const a=anchorDay(c,st.anchor);
+    [[c.T,'^'],[c.B1,'v'],[c.R,'d']].forEach(([d,s])=>{ if(d==null) return; const x=d-a; if(x>maxX(c,st.anchor)) return; const v=Lraw(c,x); if(isFinite(v)) pts.push({x,y:tr(c,v),color:c.color,shape:s}); }); });
+  const an=ANAME(); const vlines=[{x:t,color:'#3987e5',label:`${K('오늘','Today')} ${Dlab(t)}`,dash:[3,3],w:1.2},{x:0,color:'#8f8e86',label:an[st.anchor],dash:[2,4],row:1}];
+  if(st.anchor==='halving') vlines.push({x:dn(NEXT_HALVING_EST)-cur.H,color:'#8f8e86',label:K('다음 반감기(추정)','Next halving (est.)'),dash:[2,4],row:1});
+  const o=baseOpts();
+  o.scales.x.min=x0;o.scales.x.max=x1;o.scales.x.ticks.callback=v=>Dlab(Math.round(v/10)*10);o.scales.x.ticks.stepSize=st.anchor==='top'?180:250;o.scales.x.ticks.maxTicksLimit=innerWidth<600?6:10;
+  o.scales.y.type='logarithmic';o.scales.y.afterBuildTicks=pow2Ticks;
+  o.scales.y.ticks={callback:v=>st.ymode==='mult'?'×'+(+v.toPrecision(v>=1?3:2)):(Math.abs(v-1)<1e-9?K('고점','Top'):(+(v*100).toPrecision(2))+'%')};
+  o.plugins.markers={vlines,points:pts};
+  o.plugins.tooltip.callbacks={
+    title:items=>{const x=items[0].raw.x; return `${Dlab(x)} · ${K('현재 사이클','current cycle')} ${dsx(cur,x)}`},
+    label:i=>{const d=i.dataset,v=i.raw.y,val=st.ymode==='mult'?'×'+v.toFixed(v<10?3:1):pct(v-1);
+      if(d.cid){const c=CY.find(k=>k.id===d.cid); return ` ${d.label}: ${val}  ${fmtUSD(price(anchorDay(c,st.anchor)+i.raw.x))}`}
+      return ` ${d.label}: ${val}`;}};
+  upsert('overlay',sets,o);
+  document.getElementById('overlaySub').textContent=K(
+    `X축: ${an[st.anchor]}로부터 경과일 · Y축(log): ${st.ymode==='mult'?'기준일 종가 대비 배수':'각 사이클 고점 = 100%'} · ▲고점 ●바닥 ◆신고점 회복 · 점선=투영`,
+    `X: days since ${an[st.anchor]} · Y (log): ${st.ymode==='mult'?'multiple of anchor close':'each cycle top = 100%'} · ▲top ●bottom ◆new ATH · dotted = projection`);
+}
+function drawUnderwater(A){
+  const xs=[], X1=Math.max(1240, A.el+120); for(let x=0;x<=X1;x+=2) xs.push(x);
+  const sets=[], pts=[];
+  CY.forEach(c=>{ const pt=price(c.T), end=c.R!=null?c.R-c.T:S.d1-c.T;
+    sets.push({label:`${ds(c.T).slice(0,4)} ${K('고점','top')} ${fmtK(pt)}${c.current?' ('+K('현재','now')+')':''}`,cid:c.id,borderColor:c.color,backgroundColor:c.color,borderWidth:c.current?2.6:1.6,
+      data:xs.map(x=>({x,y:x<=end?(price(c.T+x)/pt-1)*100:NaN}))});
+    pts.push({x:c.B1-c.T,y:(price(c.B1)/pt-1)*100,color:c.color,shape:'v'}); if(c.R!=null) pts.push({x:c.R-c.T,y:0,color:c.color,shape:'d'});
+  });
+  const o=baseOpts();
+  o.scales.x.min=0;o.scales.x.max=X1;o.scales.x.ticks.stepSize=200;o.scales.x.ticks.callback=v=>v+dU();
+  o.scales.y.min=-100;o.scales.y.max=5;o.scales.y.ticks={stepSize:20,callback:v=>v>0?'':v+'%'};
+  o.scales.y.grid={color:c=>c.tick.value===0?'#5a5a55':'#262624'};
+  o.plugins.markers={points:pts,vlines:[
+    {x:A.el,color:'#3987e5',label:`${K('오늘','Today')} +${A.el}${dU()}`,dash:[3,3],w:1.2},
+    {x:Math.round(A.avg('tr')),color:'#0ca30c',label:`${K('평균 회복','Avg reclaim')} ${Math.round(A.avg('tr'))}${dU()}`,dash:[2,4],bottom:true}]};
+  o.plugins.tooltip.callbacks={title:i=>`${K('고점 후','Day')} +${i[0].raw.x}${K('일','')}`,label:i=>{const c=CY.find(k=>k.id===i.dataset.cid); return ` ${i.dataset.label}: ${i.raw.y.toFixed(1)}%  ${fmtUSD(price(c.T+i.raw.x))} · ${ds(c.T+i.raw.x)}`}};
+  upsert('uw',sets,o);
+  document.getElementById('legendUw').innerHTML=CY.map(c=>`<span><i style="background:${c.color}"></i>${ds(c.T).slice(0,4)} ${K('고점','top')}${c.current?' ('+K('현재','now')+')':''}</span>`).join('');
+}
+function drawUSD(PJ){
+  const cur=CY[3],today=S.d1,start=today-540,end=today+540,step=2,days=[]; for(let d=start;d<=end;d+=step) days.push(d);
+  const sets=[{label:K('실제 가격','Actual'),data:days.map(d=>({x:d,y:d<=today?price(d):NaN})),borderColor:cur.color,backgroundColor:cur.color,borderWidth:2.4}];
+  PJ.rows.forEach(r=>{ if(st.hidden.has(r.m.c.id)) return; sets.push({label:`${cname(r.m.c)} ${K('유비','analog')}`,data:days.map(d=>{if(d<today) return {x:d,y:NaN}; const v=r.f(d-today); return {x:d,y:isFinite(v)?PJ.now*ex(v):NaN}}),borderColor:r.m.c.color,backgroundColor:r.m.c.color,borderWidth:1.5,borderDash:[4,3]}); });
+  sets.push({label:K('합성(기하평균)','Composite (geo)'),data:days.map(d=>{if(d<today) return {x:d,y:NaN}; const ls=PJ.rows.map(r=>r.f(d-today)).filter(isFinite); return {x:d,y:ls.length===3?PJ.now*ex(mean(ls)):NaN}}),borderColor:COMP_COLOR,backgroundColor:COMP_COLOR,borderWidth:2,borderDash:[6,3]});
+  const o=baseOpts();
+  o.scales.x.min=start;o.scales.x.max=end;o.scales.x.ticks.callback=v=>ds(Math.round(v)).slice(2,7).replace('-','.');o.scales.x.ticks.stepSize=120;
+  o.scales.y.type='logarithmic';
+  o.scales.y.afterBuildTicks=ax=>{const c=[10e3,15e3,20e3,25e3,30e3,40e3,50e3,60e3,70e3,80e3,100e3,120e3,150e3,200e3,250e3,300e3]; ax.ticks=c.filter(v=>v>=ax.min&&v<=ax.max).map(v=>({value:v}))};
+  o.scales.y.ticks={callback:v=>fmtK(v)};
+  o.plugins.markers={vlines:[{x:today,color:'#3987e5',label:K('오늘 ','Today ')+ds(today).slice(5).replace('-','/'),dash:[3,3]}],points:[{x:cur.T,y:price(cur.T),color:cur.color,shape:'^'}]};
+  o.plugins.tooltip.callbacks={title:i=>ds(i[0].raw.x),label:i=>` ${i.dataset.label}: ${fmtUSD(i.raw.y)}`};
+  upsert('usd',sets,o);
+  document.getElementById('legend2').innerHTML=`<span><i style="background:${cur.color}"></i>${K('실제 가격','Actual')}</span>`+PJ.rows.map(r=>`<span><i style="background:${r.m.c.color}"></i>${cname(r.m.c)} ${K('유비','analog')}</span>`).join('')+`<span><i class="dash"></i>${K('합성','Composite')}</span>`;
+}
+function drawRolling(){
+  const cur=CY[3],t=maxX(cur,st.anchor),W=180,xs=[]; for(let x=(st.anchor==='prevBottom'?W-90:-560+W);x<=t;x+=7) xs.push(x);
+  const sets=CY.slice(0,3).filter(c=>!st.hidden.has(c.id)).map(c=>({label:cname(c),borderColor:c.color,backgroundColor:c.color,borderWidth:1.6,
+    data:xs.map(x=>{const a=[],b=[]; for(let k=x-W;k<=x;k+=2){const u=L(cur,k),v=Lraw(c,k); if(isFinite(u)&&isFinite(v)){a.push(u);b.push(v)}} return {x,y:a.length>40?pearson(a,b):NaN}})}));
+  const o=baseOpts();
+  o.scales.y.min=-1;o.scales.y.max=1;o.scales.y.ticks={stepSize:0.5,callback:v=>v.toFixed(1)};
+  o.scales.y.grid={color:c=>c.tick.value===0?'#4b4b46':'#262624'};
+  o.scales.x.ticks.callback=Dlab;
+  o.plugins.markers={vlines:[{x:0,color:'#8f8e86',dash:[2,4]}]};
+  o.plugins.tooltip.callbacks={title:i=>`${Dlab(i[0].raw.x)} (${dsx(cur,i[0].raw.x)})`,label:i=>` ${i.dataset.label}: r = ${i.raw.y.toFixed(3)}`};
+  upsert('rolling',sets,o);
+}
+
+
+/* ============================== ANALOG FORECAST ============================== */
+const SC_COL={A:'#9085e9',B:'#0ca30c',C:'#d55181'};
+function computeForecast(M){
+  const cur=CY[3], t=M[0].t, last=S.d1, closeNow=price(last), now=LIVE?LIVE.price:closeNow;
+  const best=[...M].sort((a,b)=>b.score-a.score)[0];
+  const scan=(e,H)=>{ const b=price(e); let G=-Infinity,hs=0; for(let h=0;h<=H;h++){ const v=ln(price(e+h))-ln(b); if(v>G){G=v;hs=h} } let mn=0,hm=0; for(let h=0;h<=hs;h++){ const v=ln(price(e+h))-ln(b); if(v<mn){mn=v;hm=h} } return {G,hs,mn,hm}; };
+  const per=M.map(m=>{ const c=m.c, a=anchorDay(c,st.anchor), e0=a+t, e=Math.min(last-30,e0+m.lag);
+    const lag=scan(e,Math.min(1500,last-e)), nolag=scan(e0,Math.min(1500,last-e0));
+    const gapToday=L(cur,t)-Lraw(c,t);
+    return {m,c,e,e0,...lag,G0:nolag.G,h0:nolag.hs,gapToday}; });
+  // diminishing returns: log multiple from the same elapsed point to the next top, cycle by cycle → extrapolate to this cycle
+  const Lm=per.map(p=>p.G0), lf=linfit(Lm.map(v=>ln(Math.max(v,1e-3)))), Lm4=ex(lf(4)), decay=ex(lf(2)-lf(1));
+  const bp=per.find(p=>p.c===best.c);
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const kA=clamp(best.beta,0.05,1.5), kB=clamp(Lm4/bp.G,0.05,3), kC=clamp(Lm[2]/bp.G,0.05,3);
+  const days=bp.hs, yrs=days/365.25;
+  const sc=[['A',kA],['B',kB],['C',Math.max(kC,kB)]].map(([key,k])=>{ const mult=ex(k*bp.G); return {key,k,target:now*mult,ret:mult-1,cagr:yrs>0?Math.pow(mult,1/yrs)-1:NaN,low:now*ex(k*bp.mn),lowDay:last+bp.hm,vsAth:now*mult/price(cur.T)-1}; });
+  const tt=CY.slice(0,3).map(c=>c.next.T-c.T), ht=CY.map(c=>c.T-c.H);
+  const cands=[last+bp.hs, last+bp.h0, cur.T+Math.round(mean(tt)), dn(NEXT_HALVING_EST)+Math.round(mean(ht))];
+  return {best,bp,per,Lm,Lm4,decay,kA,kB,sc,now,closeNow,date:last+bp.hs,days,rng:[Math.min(...cands),Math.max(...cands)],cands,t};
+}
+function renderForecast(M){
+  const F=computeForecast(M); LAST_F=F; updateShare(F); const _=0, b=F.best, bp=F.bp, c=b.c, cur=CY[3], an=ANAME();
+  const B=F.sc[1], A=F.sc[0], C=F.sc[2];
+  const eq=`${ds(bp.e)}`, eqD=bp.e-anchorDay(c,st.anchor);
+  const lagTxt=Math.abs(b.lag)<4?K('거의 동일','about even'):(b.lag>0?K(`${b.lag}일 앞서 진행`,`${b.lag} days ahead`):K(`${-b.lag}일 뒤처져 진행`,`${-b.lag} days behind`));
+  document.getElementById('fcTitle').innerHTML=K(`${cname(c)}(${c.yr}) 반복 시 다음 고점 <span style="color:${SC_COL.B}">${ds(F.date).slice(0,7)}</span> · <span style="color:${SC_COL.B}">${fmtK(B.target)}</span> · 지금 매수 수익 <span style="color:${SC_COL.B}">${pct(B.ret,0)}</span>`,
+    `If ${cname(c)} (${c.yr}) repeats: next top <span style="color:${SC_COL.B}">${ds(F.date).slice(0,7)}</span> · <span style="color:${SC_COL.B}">${fmtK(B.target)}</span> · return from today <span style="color:${SC_COL.B}">${pct(B.ret,0)}</span>`);
+  document.getElementById('fcSub').textContent=K(`기준점 ${an[st.anchor]} · 비교 구간 기준 최고 유사 사이클의 경로를 시간 괴리(τ)만큼 맞춰 정렬하고, 가격 괴리(진폭·수익 체감)를 보정해 투영합니다. 기준가 ${fmtUSD(F.now)}${LIVE?' (실시간)':' ('+ds(S.d1)+' 종가)'}.`,
+    `Anchor: ${an[st.anchor]} · the closest cycle's path, aligned by the time gap (τ) and scaled for the price gap (amplitude / diminishing returns). Base price ${fmtUSD(F.now)}${LIVE?' (live)':' ('+ds(S.d1)+' close)'}.`);
+  document.getElementById('ans1').innerHTML=`<div class="q"><b>1</b>${K('전제','Assumption')}</div>
+    <div class="d" style="margin-top:6px">${K(`<b>${cname(c)}</b>(${c.yr}) 경로를 반복한다고 가정 · 시간 괴리 <b>${sgn(b.lag,0,'일')}</b> 정렬 · 오늘 ≈ <b>${eq}</b><br>가격 보정 k: 보수 <b>${F.sc[0].k.toFixed(2)}</b> / 기준 <b>${F.sc[1].k.toFixed(2)}</b> / 낙관 <b>${F.sc[2].k.toFixed(2)}</b>`,`Repeat <b>${cname(c)}</b> (${c.yr}) · aligned by time gap <b>${sgn(b.lag,0,'d')}</b> · today ≈ <b>${eq}</b><br>Price scale k: cons. <b>${F.sc[0].k.toFixed(2)}</b> / base <b>${F.sc[1].k.toFixed(2)}</b> / opt. <b>${F.sc[2].k.toFixed(2)}</b>`)}</div>`;
+  document.getElementById('ans2').innerHTML=`<div class="q"><b>2</b>${K('다음 고점 (괴리 보정)','Next top (gap-adjusted)')}</div>
+    <div class="a">${ds(F.date).slice(0,7)} <small>${K(`약 ${F.days}일 후`,`in ~${F.days} days`)}</small></div>
+    <div class="d">${K('시점 범위','Timing range')} <b>${ds(F.rng[0]).slice(0,7)} ~ ${ds(F.rng[1]).slice(0,7)}</b><br>
+    ${K('예상 가격','Price')} <b style="color:${SC_COL.B}">${fmtUSD(B.target)}</b> <span class="muted">(${K('보수','cons.')} ${fmtK(A.target)} ~ ${K('낙관','opt.')} ${fmtK(C.target)})</span><br>
+    ${K('직전 고점','vs prior top')} ${fmtK(price(cur.T))} ${K('대비','')} <b class="${cls(B.vsAth)}">${pct(B.vsAth,0)}</b>${B.vsAth<0?K(' — 신고점 미달 시나리오',' — no new ATH in this case'):''}</div>`;
+  document.getElementById('ans3').innerHTML=`<div class="q"><b>3</b>${K(`지금 매수 시 (${fmtUSD(F.now)})`,`Buying now (${fmtUSD(F.now)})`)}</div>
+    <div class="a" style="color:${SC_COL.B}">${pct(B.ret,0)} <small>${K('기준 시나리오','base case')}</small></div>
+    <div class="d">${K('연환산','Annualized')} <b>${pct(B.cagr,1)}</b> · ${K('범위','range')} <b>${pct(A.ret,0)} ~ ${pct(C.ret,0)}</b><br>
+    ${K('고점까지 경로상 최저','Lowest point on the way')} <b class="neg">${fmtK(B.low)}</b> (${pct(B.low/F.now-1,0)}, ${ds(B.lowDay).slice(0,7)})<br>
+    <span class="muted">${K('역사적 유비에 따른 시나리오이며 확률이나 보장이 아닙니다.','A historical-analog scenario, not a probability or a promise.')}</span></div>`;
+  // scenario table
+  const scName={A:K('보수 — 진폭 괴리 β 적용','Conservative — amplitude β'),B:K('기준 — 사이클별 수익 체감 추세','Base — diminishing-returns trend'),C:K(`낙관 — 직전 사이클(${CY[2].yr}) 배수 유지`,`Optimistic — keep last cycle's (${CY[2].yr}) multiple`)};
+  document.getElementById('fcTbl').innerHTML=`<tr><th>${K('시나리오','Scenario')}</th><th>${K('보정 k','Scale k')}</th><th>${K('다음 고점가','Top price')}</th><th>${K('매수 수익','Return')}</th><th>${K('연환산','CAGR')}</th><th>${K('경로 최저','Path low')}</th></tr>`+
+    F.sc.map(x=>`<tr class="${x.key==='B'?'cur':''}"><td class="name"><span class="sw" style="background:${SC_COL[x.key]}"></span>${scName[x.key]}</td><td>${x.k.toFixed(2)}</td><td>${fmtUSD(x.target)}</td><td class="${cls(x.ret)}">${pct(x.ret,0)}</td><td>${pct(x.cagr,1)}</td><td class="neg">${fmtK(x.low)}</td></tr>`).join('');
+  // per-cycle table
+  document.getElementById('fcAll').innerHTML=`<tr><th>${K('유비 사이클','Analog')}</th><th>${K('유사도','Score')}</th><th>${K('오늘 대응 시점','Today ≈')}</th><th>${K('가격 괴리(오늘)','Price gap (today)')}</th><th>${K('시간 괴리 τ','Time gap τ')}</th><th>${K('대응점→다음 고점','To next top')}</th><th>${K('다음 고점 시점','Next top')}</th><th>${K('보정 전 배수','Raw ×')}</th><th>${K('β 보정 목표가','β-scaled target')}</th><th>${K('수익률','Return')}</th></tr>`+
+    F.per.map(p=>{ const k=clampK(p.m.beta), tgt=F.now*ex(k*p.G); return `<tr class="${p.c===c?'cur':''}"><td class="name"><span class="sw" style="background:${p.c.color}"></span>${cname(p.c)} <span class="muted">${p.c.yr}</span></td><td>${p.m.score.toFixed(0)}</td><td>${ds(p.e)}</td><td class="${cls(p.gapToday)}">${pct(ex(p.gapToday)-1,0)}</td><td>${sgn(p.m.lag,0,dU())}</td><td>${p.hs}${dU()}</td><td>${ds(S.d1+p.hs).slice(0,7)}</td><td>×${ex(p.G).toFixed(1)}</td><td>${fmtUSD(tgt)}</td><td class="${cls(tgt/F.now-1)}">${pct(tgt/F.now-1,0)}</td></tr>`; }).join('')+
+    `<tr><td colspan="10" class="fn">${K(
+      `<b>계산 방식.</b> ① 대응 시점 = 유비 사이클 기준점 + 현재 경과일 + 시간 괴리 τ. ② 그 시점부터 다음 고점까지의 로그 상승폭 G와 소요일을 과거 경로에서 측정. ③ 목표가 = 현재가 × e<sup>k·G</sup>. k(보정 계수): 보수 = 현재 사이클이 유비 대비 보인 진폭비 β, 기준 = 같은 경과일→다음 고점 로그 배수가 사이클마다 ×${F.decay.toFixed(2)}씩 줄어든 추세(${F.Lm.map(v=>'×'+ex(v).toFixed(1)).join(' → ')} → ×${ex(F.Lm4).toFixed(1)})에 맞춘 값, 낙관 = 체감 없이 직전 사이클 배수(×${ex(F.Lm[2]).toFixed(1)})를 유지하는 값. 시점 범위는 τ 보정/미보정 유비, 고점→고점 평균(${Math.round(mean(CY.slice(0,3).map(c=>c.next.T-c.T)))}일), 다음 반감기+평균 반감기→고점 일수 중 최소~최대.`,
+      `<b>Method.</b> ① Equivalent point = analog anchor + current elapsed days + time gap τ. ② From there, measure the log rise G to the next top and the days it took. ③ Target = price × e<sup>k·G</sup>. Scale k: conservative = amplitude ratio β of this cycle vs the analog; base = fitted to the trend of same-point→next-top log multiples shrinking ×${F.decay.toFixed(2)} per cycle (${F.Lm.map(v=>'×'+ex(v).toFixed(1)).join(' → ')} → ×${ex(F.Lm4).toFixed(1)}); optimistic = no further decay, keeping the last cycle's ×${ex(F.Lm[2]).toFixed(1)}. Timing range spans the τ-adjusted and unadjusted analogs, the average top→top (${Math.round(mean(CY.slice(0,3).map(c=>c.next.T-c.T)))} d), and next halving + average halving→top.`)}</td></tr>`;
+  document.getElementById('fcDisc').textContent=K('표본은 과거 사이클 3개뿐이고 구조 변화(ETF, 거시 유동성)로 패턴이 깨질 수 있습니다. 이 수치는 과거 패턴을 반복한다고 가정한 계산 결과이며, 투자 조언이 아닙니다. 투자 결정은 본인 판단과 책임으로 하시기 바랍니다.','Only three past cycles exist and structural change (ETFs, macro liquidity) can break the pattern. These figures assume history repeats; they are calculations, not investment advice.');
+  drawForecastChart(F);
+}
+const clampK=v=>Math.max(0.05,Math.min(1.5,v));
+function drawForecastChart(F){
+  const cur=CY[3], bp=F.bp, last=S.d1, start=last-420, end=last+bp.hs+120, step=3, days=[]; for(let d=start; d<=end; d+=step) days.push(d); if(days[days.length-1]<end) days.push(end);
+  const base=price(bp.e);
+  const sets=[{label:K('실제 가격','Actual'),data:days.map(d=>({x:d,y:d<=last?price(d):NaN})),borderColor:cur.color,backgroundColor:cur.color,borderWidth:2.4}];
+  const pts=[];
+  F.sc.slice().reverse().forEach(x=>{ sets.push({label:{A:K('보수','Conservative'),B:K('기준','Base'),C:K('낙관','Optimistic')}[x.key],data:days.map(d=>{ if(d<last) return {x:d,y:NaN}; const h=d-last; const v=ln(price(bp.e+h))-ln(base); return {x:d,y:isFinite(v)?F.now*ex(x.k*v):NaN}; }),borderColor:SC_COL[x.key],backgroundColor:SC_COL[x.key],borderWidth:x.key==='B'?2.2:1.4,borderDash:x.key==='B'?[]:[5,4]});
+    pts.push({x:last+bp.hs,y:x.target,color:SC_COL[x.key],shape:'d'}); });
+  const o=baseOpts();
+  o.scales.x.min=start;o.scales.x.max=end;o.scales.x.ticks.callback=v=>ds(Math.round(v)).slice(2,7).replace('-','.');o.scales.x.ticks.stepSize=180;
+  o.scales.y.type='logarithmic';
+  o.scales.y.afterBuildTicks=ax=>{const c=[20e3,30e3,40e3,50e3,60e3,80e3,100e3,125e3,150e3,200e3,250e3,300e3,400e3,500e3,700e3,1e6]; ax.ticks=c.filter(v=>v>=ax.min&&v<=ax.max).map(v=>({value:v}))};
+  o.scales.y.ticks={callback:v=>fmtK(v)};
+  o.plugins.markers={points:pts,vlines:[{x:last,color:'#3987e5',label:K('오늘','Today'),dash:[3,3]},{x:last+bp.hs,color:SC_COL.B,label:K('다음 고점 ','Next top ')+ds(last+bp.hs).slice(0,7),dash:[2,4],row:1}],
+    hlines:[{y:price(cur.T),color:'#8f8e86',label:`${K('직전 고점','Prior top')} ${fmtK(price(cur.T))}`},{y:F.now,color:'#3987e5',dash:[1,3]}]};
+  o.plugins.tooltip.callbacks={title:i=>ds(i[0].raw.x),label:i=>` ${i.dataset.label}: ${fmtUSD(i.raw.y)} (${pct(i.raw.y/F.now-1,0)})`};
+  upsert('fcChart',sets,o);
+  document.getElementById('legendFc').innerHTML=`<span><i style="background:${cur.color}"></i>${K('실제','Actual')}</span>`+F.sc.map(x=>`<span><i style="background:${SC_COL[x.key]}"></i>${{A:K('보수','Conservative'),B:K('기준','Base'),C:K('낙관','Optimistic')}[x.key]} ${fmtK(x.target)}</span>`).join('')+`<span class="muted">· ${K('유비','analog')}: ${cname(F.best.c)}</span>`;
+}
+
+function renderNow(){
+  const F=LAST_F, A=LAST_A; if(!F||!A) return; const b=F.best, bp=F.bp, c=b.c, cur=CY[3];
+  const lagKo=Math.abs(b.lag)<4?'거의 같은 속도로':(b.lag>0?`${b.lag}일 앞서`:`${-b.lag}일 뒤처져`), lagEn=Math.abs(b.lag)<4?'at about the same pace':(b.lag>0?`${b.lag} days ahead`:`${-b.lag} days behind`);
+  const eqD=bp.e-anchorDay(c,st.anchor);
+  document.getElementById('nowAnalysis').innerHTML=`
+   <div class="pk" style="font:600 11px var(--mono);letter-spacing:.12em;color:var(--text-muted)">${K('현재 분석','CURRENT ANALYSIS')}</div>
+   <div class="hd"><span class="sw" style="background:${c.color};width:12px;height:12px;margin:0"></span><span class="big">${cname(c)}</span><span class="muted">${c.yr}</span><span class="tag">${K('유사도','score')} ${b.score.toFixed(0)}</span></div>
+   <ul class="nowlist">
+    <li><span>${K('위치','WHERE')}</span><div>${K(`오늘은 ${cname(c)}의 <b>${ds(bp.e)}</b> 무렵 (${Dlab(eqD)})과 가장 닮았습니다.`,`Today looks most like <b>${ds(bp.e)}</b> in ${cname(c)} (${Dlab(eqD)}).`)}</div></li>
+    <li><span>${K('가격','PRICE')}</span><div>${K(`같은 경과일 기준 <b class="${cls(bp.gapToday)}">${pct(ex(bp.gapToday)-1,0)}</b>, 움직임 크기는 <b>${b.beta.toFixed(2)}배</b>로 수익 체감이 이어지고 있습니다.`,`<b class="${cls(bp.gapToday)}">${pct(ex(bp.gapToday)-1,0)}</b> at the same elapsed day; moves are <b>${b.beta.toFixed(2)}×</b> as large — diminishing returns continue.`)}</div></li>
+    <li><span>${K('시간','TIME')}</span><div>${K(`${cname(c)}보다 <b>${lagKo}</b> 진행 중입니다.`,`Running <b>${lagEn}</b> of ${cname(c)}.`)}</div></li>
+    <li><span>${K('하락폭','DRAWDOWN')}</span><div>${K(`고점 대비 <b class="neg">${pct(F.now/price(cur.T)-1,1)}</b>, 잠정 바닥은 <b>${pct(price(cur.B1)/price(cur.T)-1,0)}</b> (과거 −77~−84%)`,`<b class="neg">${pct(F.now/price(cur.T)-1,1)}</b> from top; provisional bottom <b>${pct(price(cur.B1)/price(cur.T)-1,0)}</b> (past −77% to −84%)`)}</div></li>
+   </ul>
+   <div class="bottom">${K(`요약: 지금은 <b>직전 고점 이후 신고점으로 가는 회복 구간</b>이며, 과거 평균 회복 기간의 ${Math.round(A.el/A.avg('tr')*100)}%를 지나고 있습니다.`,`In short: a <b>recovery phase between the prior top and the next new high</b>, ${Math.round(A.el/A.avg('tr')*100)}% of the way through the average reclaim time.`)}</div>`;
+}
+/* ============================== PANELS ============================== */
+function renderPhase(A){
+  const cur=CY[3], X1=1500, P=x=>Math.max(0,Math.min(100,x/X1*100)).toFixed(2)+'%';
+  const bx=cur.B1-cur.T, avgTR=Math.round(A.avg('tr'));
+  const prog=A.el/A.avg('tr');
+  const sub=A.reclaimed?K('신고점 회복 완료 — 다음 고점 형성 구간','New ATH reclaimed — building toward the next top'):
+    (cur.B1===S.d1?K('고점 이후 최저가 갱신 중 (바닥 탐색)','Making new post-top lows (searching for a bottom)'):K(`잠정 바닥(${ds(cur.B1)}, ${pct(price(cur.B1)/price(cur.T)-1)}) 이후 회복 시도 구간`,`Recovery attempt after provisional bottom (${ds(cur.B1)}, ${pct(price(cur.B1)/price(cur.T)-1)})`));
+  document.getElementById('phase').innerHTML=`
+   <div><div class="pk">${K('현재 국면','Current phase')}</div>
+    <div class="pv">${K('직전 고점 → <span>신고점</span> 구간','Prior top → <span>new ATH</span>')}</div>
+    <div class="ps">${sub}<br>${K(`고점 ${fmtUSD(price(cur.T))} (${ds(cur.T)}) 이후 <b>${A.el}일</b> · 고점 대비 <b class="neg">${pct(A.curDd)}</b> · 과거 평균 회복 기간의 <b>${(prog*100).toFixed(0)}%</b> 경과`,`<b>${A.el} days</b> since the ${fmtUSD(price(cur.T))} top (${ds(cur.T)}) · <b class="neg">${pct(A.curDd)}</b> from top · <b>${(prog*100).toFixed(0)}%</b> of the average reclaim time elapsed`)}</div></div>
+   <div>
+    <div class="ptrack">
+      <div class="band" style="left:${P(A.minTR)};width:calc(${P(A.maxTR)} - ${P(A.minTR)})"></div>
+      <div class="fill" style="left:0;width:${P(bx)};background:rgba(230,103,103,.55)"></div>
+      <div class="fill" style="left:${P(bx)};width:calc(${P(A.el)} - ${P(bx)});background:rgba(110,109,102,.6);border-radius:0"></div>
+      <div class="mk" style="left:0;background:var(--text-primary)"></div><div class="ml up" style="left:0;transform:none;color:var(--text-secondary)">${K('고점','Top')}<span class="hm"> ${ds(cur.T).slice(2)}</span></div>
+      <div class="mk" style="left:${P(bx)};background:var(--bad)"></div><div class="ml dn" style="left:${P(bx)};color:var(--bad)">${K('잠정 바닥','Prov. bottom')} +${bx}</div>
+      <div class="mk" style="left:${P(A.el)};background:var(--c4);width:3px"></div><div class="ml up" style="left:${P(A.el)};color:var(--c4)">${K('오늘','Today')} +${A.el}</div>
+      <div class="mk" style="left:${P(avgTR)};background:var(--good)"></div><div class="ml dn" style="left:${P(avgTR)};color:var(--good)">${K('평균 회복','Avg reclaim')} +${avgTR}</div>
+      <div class="ml up hm" style="left:${P((A.minTR+A.maxTR)/2)};color:#5fbf5f">${K('과거 신고점 회복 범위','Past reclaim range')} ${A.minTR}–${A.maxTR}${dU()}</div>
+    </div>
+    <div class="ps">${K('예상 신고점 회복일','Est. new-ATH date')} — ${K('평균','avg')} <b>${ds(A.est.avg)}</b> · ${K('추세','trend')} <b>${ds(A.est.trend)}</b> · ${K('바닥 기준','from bottom')} <b>${ds(A.est.bot)}</b> &nbsp;|&nbsp; ${K('다음 사이클 고점(평균)','Next cycle top (avg)')} <b>${ds(A.est.nextTop)}</b></div>
+   </div>`;
+}
+function renderKPIs(M){
+  const cur=CY[3],now=price(S.d1),top=price(cur.T),low=price(cur.B1),dH=S.d1-cur.H,dT=S.d1-cur.T,best=[...M].sort((a,b)=>b.score-a.score)[0];
+  const prog=dH/(dn(NEXT_HALVING_EST)-cur.H), tbs=CY.slice(0,3).map(c=>c.B1-c.T);
+  const k=[
+    LIVE?[K('BTC 실시간 (15분)','BTC live (15 min)'),fmtUSD(LIVE.price),`${isFinite(LIVE.ch24)?pct(LIVE.ch24/100,2)+' 24h · ':''}${fmtTime(LIVE.ts)}`,isFinite(LIVE.ch24)?cls(LIVE.ch24):'']:[K('BTC 종가','BTC close'),fmtUSD(now),`${ds(S.d1)} ${K('종가 기준','close')}`,''],
+    [K('반감기 후 경과','Since halving'),`D+${dH}`,`${K('사이클 진행률','Cycle progress')} ${(prog*100).toFixed(1)}%`,''],
+    [K('사이클 고점 대비','From cycle top'),pct((LIVE?LIVE.price:now)/top-1),`${K('고점','Top')} ${fmtUSD(top)} · ${ds(cur.T)}${LIVE?K(' · 실시간',' · live'):''}`,'neg'],
+    [K('고점 후 경과','Since top'),`${dT}${dU()}`,`${K('과거 고점→바닥','Past top→bottom')} ${Math.min(...tbs)}–${Math.max(...tbs)}${dU()}`,''],
+    [K('최대 낙폭(잠정 바닥)','Max drawdown (prov.)'),pct(low/top-1),`${fmtUSD(low)} · ${ds(cur.B1)}`,'neg'],
+    [K('최고 유사 사이클','Closest cycle'),cname(best.c),`${K('종합','score')} ${best.score.toFixed(0)} · r_R ${best.rR.toFixed(2)}`,'']];
+  document.getElementById('kpis').innerHTML=k.map(([a,b,c,d])=>`<div class="kpi"><div class="k">${a}</div><div class="v ${d}">${b}</div><div class="s">${c}</div></div>`).join('');
+}
+function legend1(){
+  const items=[...CY.slice(0,3).map(c=>[c.id,c.color,`${cname(c)} · ${c.yr}`,false]),['c4',CY[3].color,`${cname(CY[3])} · ${CY[3].yr} (${K('현재','now')})`,false],['comp',COMP_COLOR,K('과거 평균','Past avg'),true]];
+  document.getElementById('legend1').innerHTML=items.map(([id,col,lab,dash])=>`<span data-id="${id}" class="${st.hidden.has(id)?'off':''}"><i class="${dash?'dash':''}" style="background:${col}"></i>${lab}</span>`).join('');
+  document.querySelectorAll('#legend1 span').forEach(el=>el.onclick=()=>{const id=el.dataset.id; st.hidden.has(id)?st.hidden.delete(id):st.hidden.add(id); render();});
+}
+function renderScore(M){
+  const sorted=[...M].sort((a,b)=>b.score-a.score), an=ANAME();
+  const winTxt={anchor:K('기준점→현재','anchor→today'),365:K('최근 365일','last 365 days'),180:K('최근 180일','last 180 days'),full:K('전체 구간','full range')}[st.win];
+  document.getElementById('scoreSub').textContent=K(`비교 구간: ${winTxt} (${Dlab(M[0].xs)} ~ ${Dlab(M[0].t)}, ${M[0].n}일) · 기준점: ${an[st.anchor]}`,`Window: ${winTxt} (${Dlab(M[0].xs)} to ${Dlab(M[0].t)}, ${M[0].n} days) · anchor: ${an[st.anchor]}`);
+  document.getElementById('scoreTbl').innerHTML=`<tr><th>${K('사이클','Cycle')}</th><th>${K('종합 유사도','Score')}</th><th>${K('수익률 r','Return r')}</th><th>${K('레벨 r','Level r')}</th><th>${K('진폭비 β','Amplitude β')}</th><th>${K('형태 오차','Shape err.')}</th></tr>`+
+    sorted.map(m=>`<tr><td class="name"><span class="sw" style="background:${m.c.color}"></span>${cname(m.c)} <span class="muted">${m.c.yr}</span></td><td><b>${m.score.toFixed(1)}</b><span class="bar"><b style="width:${Math.max(0,Math.min(100,m.score))}%;background:${m.c.color}"></b></span></td><td>${m.rR.toFixed(3)}</td><td>${m.rL.toFixed(3)}</td><td>${m.beta.toFixed(3)}</td><td>±${((ex(m.rmseShape)-1)*100).toFixed(1)}%</td></tr>`).join('');
+  const b=sorted[0], md=`${Dlab(b.dtw.matchX)} (${ds(anchorDay(b.c,st.anchor)+b.dtw.matchX)})`;
+  const lagKo=Math.abs(b.lag)<4?'시간축으로는 거의 동일한 속도로':(b.lag>0?`시간축으로 약 <b>${b.lag}일 앞서</b>`:`시간축으로 약 <b>${-b.lag}일 뒤처져</b>`);
+  const lagEn=Math.abs(b.lag)<4?'at almost the same pace':(b.lag>0?`about <b>${b.lag} days ahead</b>`:`about <b>${-b.lag} days behind</b>`);
+  document.getElementById('insight').innerHTML=K(
+    `현재 사이클은 <b>${cname(b.c)}(${b.c.yr})</b>와 가장 유사합니다(종합 ${b.score.toFixed(0)}점). 같은 경과일 기준 현재 경로는 ${cname(b.c)} 대비 평균 <b>${pct(ex(b.bias)-1)}</b> 수준이고 진폭은 <b>${b.beta.toFixed(2)}배</b>이며, ${lagKo} 진행 중입니다. DTW 대응점으로 보면 오늘은 ${cname(b.c)}의 <b>${md}</b>에 해당합니다.`,
+    `The current cycle most resembles <b>${cname(b.c)} (${b.c.yr})</b> (score ${b.score.toFixed(0)}). At the same elapsed day it sits <b>${pct(ex(b.bias)-1)}</b> versus ${cname(b.c)} on average, moves with <b>${b.beta.toFixed(2)}×</b> the amplitude, and is running ${lagEn}. By DTW, today corresponds to ${cname(b.c)}'s <b>${md}</b>.`);
+}
+function renderDiff(M){
+  const cur=CY[3];
+  const rows=M.map(m=>{ const c=m.c, dHT=(c.T-c.H)-(cur.T-cur.H);
+    return `<tr><td class="name"><span class="sw" style="background:${c.color}"></span>${cname(c)} <span class="muted">${c.yr}</span></td>
+      <td class="${cls(m.bias)}">${pct(ex(m.bias)-1)}</td><td>${((ex(m.rmse)-1)*100).toFixed(1)}%</td><td>${m.beta.toFixed(3)}</td><td>±${((ex(m.rmseShape)-1)*100).toFixed(1)}%</td>
+      <td>${sgn(m.lag,0,dU())}${Math.abs(m.lag)>=240?` <span class="muted">${K('경계','bound')}</span>`:''}<div class="muted small">r=${m.lagR.toFixed(2)}</div></td>
+      <td>${sgn(m.dtw.lag,0,dU())}</td><td>${m.dtw.dist.toFixed(3)}</td><td>${sgn(dHT,0,dU())}</td></tr>`;}).join('');
+  const aB=mean(M.map(m=>m.bias)),aL=mean(M.map(m=>m.lag)),aD=mean(M.map(m=>m.dtw.lag)),aBe=ex(mean(M.map(m=>ln(Math.max(1e-3,m.beta)))));
+  document.getElementById('diffTbl').innerHTML=`<tr><th>${K('과거 사이클','Past cycle')}</th><th>${K('가격 괴리 (편향)','Price gap (bias)')}</th><th>${K('평균 절대 괴리','Abs. gap (RMSE)')}</th><th>${K('진폭비 β','Amplitude β')}</th><th>${K('형태 오차','Shape err.')}</th><th>${K('최적 시차 τ','Optimal lag τ')}</th><th>${K('DTW 시차','DTW lag')}</th><th>${K('DTW 거리','DTW dist.')}</th><th>${K('변곡점 시차 (반감기→고점)','Turning-pt lag (halving→top)')}</th></tr>`+rows+
+   `<tr class="avg"><td class="name">${K('평균','Average')}</td><td>${pct(ex(aB)-1)}</td><td>—</td><td>${aBe.toFixed(3)}</td><td>—</td><td>${sgn(aL,0,dU())}</td><td>${sgn(aD,0,dU())}</td><td>—</td><td>—</td></tr>`+
+   `<tr><td colspan="9" class="fn">${K(`모든 시차는 <b>+ = 현재가 앞서 진행</b>(오늘이 과거 사이클의 더 늦은 시점과 닮음), − = 뒤처져 진행. 반감기→고점 시차 = 과거 − 현재(${cur.T-cur.H}일). 형태 오차는 진폭(β) 보정 후 잔차.`,`All lags: <b>+ = current cycle running ahead</b> (today resembles a later point of the past cycle), − = behind. Halving→top lag = past − current (${cur.T-cur.H} d). Shape error is the residual after amplitude (β) scaling.`)}</td></tr>`;
+}
+function renderProj(PJ){
+  const H=PJ.H, an=ANAME();
+  document.getElementById('projSub').textContent=K(`기준: ${fmtUSD(PJ.now)} (${ds(S.d1)}) · ${st.lag?'시차 보정 τ 적용':'같은 경과일 정렬(τ=0)'} · ${st.amp?'진폭 β 보정':'진폭 원본(β=1)'} · 기준점 ${an[st.anchor]}`,`Base: ${fmtUSD(PJ.now)} (${ds(S.d1)}) · ${st.lag?'lag-adjusted τ':'same elapsed day (τ=0)'} · ${st.amp?'β-scaled':'raw amplitude (β=1)'} · anchor ${an[st.anchor]}`);
+  const row=(name,color,hz,bot,c='')=>`<tr class="${c}"><td class="name"><span class="sw" style="background:${color}"></span>${name}</td>${hz.map(v=>`<td class="${cls(v/PJ.now-1)}">${fmtK(v)}<div class="muted small">${pct(v/PJ.now-1,0)}</div></td>`).join('')}<td>${bot.h>0?fmtK(bot.p):'—'}<div class="muted small">${bot.h>0?ds(S.d1+bot.h).slice(2)+' · +'+bot.h+dU():K('추가 저점 없음','no lower low')}</div></td></tr>`;
+  document.getElementById('projTbl').innerHTML=`<tr><th>${K('유비','Analog')}</th>${H.map(h=>`<th>+${h}${dU()}</th>`).join('')}<th>${K('투영 저점','Proj. low')}</th></tr>`+
+    PJ.rows.map(r=>row(`${cname(r.m.c)}${st.lag?` <span class="muted">τ${sgn(r.tau,0)}</span>`:''}${st.amp?` <span class="muted">β${r.k.toFixed(2)}</span>`:''}`,r.m.c.color,r.hz,r.bot)).join('')+row(K('합성','Composite'),COMP_COLOR,PJ.comp,PJ.compBot,'avg');
+}
+function renderAth(A){
+  const X1=1600, P=x=>(Math.max(0,Math.min(X1,x))/X1*100).toFixed(2)+'%', cur=CY[3];
+  const rows=CY.map(c=>{
+    const lab=`${ds(c.T).slice(0,4)}→${c.current?'?':ds(c.next.T).slice(0,4)}`;
+    const tb=c.B1-c.T; let s='';
+    if(!c.current){ const tr=c.R-c.T, tt=c.next.T-c.T;
+      s=`<div class="seg2 bear" style="left:0;width:${P(tb)}">${tb}</div><div class="seg2 rec" style="left:${P(tb)};width:calc(${P(tr)} - ${P(tb)})">${tr-tb}</div><div class="seg2 bull" style="left:${P(tr)};width:calc(${P(tt)} - ${P(tr)})">${tt-tr}</div><div class="tick" style="left:${P(tr)}" title="${ds(c.R)}"></div>`;
+    } else { const el=A.el, ar=Math.round(A.avg('tr')), at=Math.round(A.avg('tt'));
+      s=`<div class="seg2 bear" style="left:0;width:${P(tb)}">${tb}</div><div class="seg2 rec" style="left:${P(tb)};width:calc(${P(el)} - ${P(tb)})">${el-tb}</div>`+
+        (ar>el?`<div class="seg2 proj" style="left:${P(el)};width:calc(${P(ar)} - ${P(el)})">${ar-el}?</div>`:'')+
+        `<div class="seg2 projg" style="left:${P(Math.max(ar,el))};width:calc(${P(at)} - ${P(Math.max(ar,el))})"></div><div class="todaymark" style="left:${P(el)}"></div>`; }
+    return `<div class="tlrow"><div class="lab"><span class="sw" style="background:${c.color}"></span>${lab}</div><div class="track">${s}</div></div>`; }).join('');
+  document.getElementById('athBars').innerHTML=rows;
+  document.getElementById('athAxis').innerHTML=[0,400,800,1200,1600].map(v=>`<span style="left:${(v/X1*100)}%">${v}${dU()}</span>`).join('');
+  document.getElementById('athLegend').innerHTML=`<span><i class="blk" style="background:var(--bad)"></i>${K('하락 (고점→바닥)','Decline (top→bottom)')}</span><span><i class="blk" style="background:#4b4b46"></i>${K('회복 (바닥→신고점)','Recovery (bottom→ATH)')}</span><span><i class="blk" style="background:var(--good)"></i>${K('확장 (신고점→다음 고점)','Expansion (ATH→next top)')}</span><span><i class="blk" style="background:var(--text-primary);width:3px"></i>${K('신고점 회복','New ATH')}</span>`;
+  const trs=A.rec.map(r=>r.tr), tts=A.rec.map(r=>r.tt), brs=A.rec.map(r=>r.br);
+  document.getElementById('athInsight').innerHTML=K(
+   `고점→신고점 소요 기간은 <b>${trs.join(' → ')}일</b>로 사이클마다 짧아졌고, 고점→다음 고점은 <b>${tts.join(' / ')}일</b>로 약 ${(mean(tts)/365.25).toFixed(1)}년에 고정되어 있습니다. 현재 <b>${A.el}일</b> 경과(평균의 ${(A.el/A.avg('tr')*100).toFixed(0)}%). 바닥→신고점 회복은 ${brs.join(' → ')}일이었습니다.`,
+   `Top→new-ATH has shortened each cycle: <b>${trs.join(' → ')} days</b>, while top→next top stays near ${(mean(tts)/365.25).toFixed(1)} years (<b>${tts.join(' / ')} days</b>). We are <b>${A.el} days</b> in (${(A.el/A.avg('tr')*100).toFixed(0)}% of the average). Bottom→ATH recovery took ${brs.join(' → ')} days.`);
+  // table
+  const hd=`<tr><th>${K('사이클 고점','Cycle top')}</th><th>${K('고점 종가','Top close')}</th><th>${K('고점→바닥','Top→bottom')}</th><th>${K('최대 낙폭','Max DD')}</th><th>${K('바닥→신고점','Bottom→ATH')}</th><th>${K('고점→신고점','Top→ATH')}</th><th>${K('신고점 회복일','New-ATH date')}</th><th>${K('반감기 대비 회복','Reclaim vs halving')}</th><th>${K('고점→다음 고점','Top→next top')}</th></tr>`;
+  const rr=A.rec.map(r=>`<tr><td class="name"><span class="sw" style="background:${r.c.color}"></span>${ds(r.c.T)}</td><td>${fmtUSD(price(r.c.T))}</td><td>${r.tb}${dU()}</td><td class="neg">${pct(r.dd)}</td><td>${r.br}${dU()}</td><td><b>${r.tr}${dU()}</b></td><td>${ds(r.c.R)}</td><td>${sgn(r.rh,0,dU())}</td><td>${r.tt}${dU()}</td></tr>`).join('');
+  const cb=cur.B1-cur.T;
+  const crow=`<tr class="cur"><td class="name"><span class="sw" style="background:${cur.color}"></span>${ds(cur.T)}</td><td>${fmtUSD(price(cur.T))}</td><td>${cb}${dU()} <span class="muted">${K('잠정','prov.')}</span></td><td class="neg">${pct(price(cur.B1)/price(cur.T)-1)}</td><td>${S.d1-cur.B1}${dU()}+</td><td><b>${A.el}${dU()}+</b></td><td class="muted">${K('미회복','not yet')}</td><td class="muted">${K('다음 반감기','next halving')} ${ds(dn(NEXT_HALVING_EST)).slice(0,7)}</td><td>—</td></tr>`;
+  const avg=`<tr class="avg"><td class="name">${K('과거 평균','Past average')}</td><td></td><td>${A.avg('tb').toFixed(0)}${dU()}</td><td>${pct(A.avg('dd'))}</td><td>${A.avg('br').toFixed(0)}${dU()}</td><td>${A.avg('tr').toFixed(0)}${dU()}</td><td>${K('추세 외삽','trend')} ${A.trendTR.toFixed(0)}${dU()}</td><td>${sgn(A.avg('rh'),0,dU())}</td><td>${A.avg('tt').toFixed(0)}${dU()}</td></tr>`;
+  const est=`<tr><td colspan="9" class="fn">${K('현재 사이클 예상 신고점 회복일','Current cycle — estimated new-ATH date')}: ① ${K('평균 소요일','avg duration')} ${ds(A.est.avg)} ② ${K('소요일 선형 추세','linear trend of durations')} ${ds(A.est.trend)} ③ ${K('잠정 바닥 + 평균 바닥→신고점','prov. bottom + avg bottom→ATH')} ${ds(A.est.bot)}. ${K('과거 신고점은 반감기 전후(−47 ~ +229일)에 회복됐습니다.','Past new ATHs came around the halving (−47 to +229 days).').replace('−47 ~ +229',`${sgn(Math.min(...A.rec.map(r=>r.rh)),0)} ~ ${sgn(Math.max(...A.rec.map(r=>r.rh)),0)}`).replace('−47 to +229',`${sgn(Math.min(...A.rec.map(r=>r.rh)),0)} to ${sgn(Math.max(...A.rec.map(r=>r.rh)),0)}`)}</td></tr>`;
+  document.getElementById('athTbl').innerHTML=hd+rr+crow+avg+est;
+}
+function renderTimeline(){
+  const minX=-1300,maxX=1100,span=maxX-minX,P=x=>((x-minX)/span*100).toFixed(2)+'%', avgTB=mean(CY.slice(0,3).map(c=>c.B1-c.T));
+  const html=CY.map(c=>{ const a=c.B0-c.H,t=c.T-c.H,b=(c.current?S.d1:c.B1)-c.H;
+    let s=`<div class="seg2 acc" style="left:${P(a)};width:calc(${P(0)} - ${P(a)})">${-a}</div><div class="seg2 bull" style="left:${P(0)};width:calc(${P(t)} - ${P(0)})">${t}</div><div class="seg2 bear" style="left:${P(t)};width:calc(${P(b)} - ${P(t)})">${b-t}</div>`;
+    if(c.current){ const pe=Math.round(t+avgTB); if(pe>b) s+=`<div class="seg2 proj" style="left:${P(b)};width:calc(${P(pe)} - ${P(b)})"></div>`; s+=`<div class="todaymark" style="left:${P(b)}"></div>`; }
+    return `<div class="tlrow"><div class="lab"><span class="sw" style="background:${c.color}"></span>${c.yr}</div><div class="track"><div class="zero" style="left:${P(0)}"></div>${s}</div></div>`;}).join('');
+  document.getElementById('timeline').innerHTML=html+`<div class="legend" style="margin:4px 0 0 0"><span><i class="blk" style="background:#4b4b46"></i>${K('축적','Accumulation')}</span><span><i class="blk" style="background:var(--good)"></i>${K('상승','Bull')}</span><span><i class="blk" style="background:var(--bad)"></i>${K('하락','Bear')}</span><span><i class="blk" style="background:var(--c4);width:3px"></i>${K('오늘','Today')}</span></div>`;
+  document.getElementById('tlaxis').innerHTML=[-1200,-800,-400,0,400,800].map(v=>`<span style="left:${P(v)}">${v>0?'+':''}${v}</span>`).join('');
+}
+function renderMilestones(){
+  const r=c=>{const p0=price(c.B0),ph=price(c.H),pt=price(c.T),pb=price(c.B1); return {c,p0,ph,pt,pb,d0h:c.H-c.B0,dht:c.T-c.H,dtb:c.B1-c.T,d0t:c.T-c.B0,mh:pt/ph,m0:pt/p0,dd:pb/pt-1}};
+  const R=CY.map(r),past=R.slice(0,3),cur=R[3];
+  const avg={d0h:mean(past.map(x=>x.d0h)),dht:mean(past.map(x=>x.dht)),dtb:mean(past.map(x=>x.dtb)),d0t:mean(past.map(x=>x.d0t)),mh:ex(mean(past.map(x=>ln(x.mh)))),m0:ex(mean(past.map(x=>ln(x.m0)))),dd:mean(past.map(x=>x.dd))};
+  const D=v=>v+dU();
+  const tr=x=>`<tr class="${x.c.current?'cur':''}"><td class="name"><span class="sw" style="background:${x.c.color}"></span>${cname(x.c)} <span class="muted">${x.c.yr}</span></td>
+    <td>${fmtUSD(x.p0)}</td><td>${fmtUSD(x.ph)}</td><td>${fmtUSD(x.pt)}</td><td>${fmtUSD(x.pb)}${x.c.current?` <span class="muted">${K('잠정','prov.')}</span>`:''}</td>
+    <td>${D(x.d0h)}</td><td>${D(x.dht)}</td><td>${D(x.dtb)}${x.c.current?` <span class="muted">${K('잠정','prov.')}</span>`:''}</td><td>${D(x.d0t)}</td>
+    <td>×${x.mh.toFixed(2)}</td><td>×${x.m0.toFixed(1)}</td><td class="neg">${pct(x.dd)}</td></tr>`;
+  document.getElementById('msTbl').innerHTML=`<tr><th>${K('사이클','Cycle')}</th><th>${K('직전 바닥','Prior bottom')}</th><th>${K('반감기','Halving')}</th><th>${K('고점','Top')}</th><th>${K('바닥','Bottom')}</th><th>${K('바닥→반감기','Bottom→halving')}</th><th>${K('반감기→고점','Halving→top')}</th><th>${K('고점→바닥','Top→bottom')}</th><th>${K('바닥→고점','Bottom→top')}</th><th>${K('반감기→고점 배수','Halving→top ×')}</th><th>${K('바닥→고점 배수','Bottom→top ×')}</th><th>${K('최대 낙폭','Max DD')}</th></tr>`+
+    R.map(tr).join('')+
+    `<tr class="avg"><td class="name">${K('과거 평균','Past average')}</td><td colspan="4" class="muted">${K('배수는 기하평균','multiples: geometric mean')}</td><td>${D(avg.d0h.toFixed(0))}</td><td>${D(avg.dht.toFixed(0))}</td><td>${D(avg.dtb.toFixed(0))}</td><td>${D(avg.d0t.toFixed(0))}</td><td>×${avg.mh.toFixed(2)}</td><td>×${avg.m0.toFixed(1)}</td><td>${pct(avg.dd)}</td></tr>`+
+    `<tr class="avg"><td class="name">${K('현재 − 평균','Current − avg')}</td><td colspan="4"></td><td>${sgn(cur.d0h-avg.d0h,0,dU())}</td><td>${sgn(cur.dht-avg.dht,0,dU())}</td><td>—</td><td>${sgn(cur.d0t-avg.d0t,0,dU())}</td><td>${pct(cur.mh/avg.mh-1,0)}</td><td>${pct(cur.m0/avg.m0-1,0)}</td><td>—</td></tr>`;
+  const dtbs=past.map(x=>x.dtb),mu=mean(dtbs),sd=std(dtbs),T=CY[3].T,el=S.d1-T;
+  const dds=past.map(x=>-x.dd), dd4=linfit(dds)(4), slope=(dds[2]-dds[0])/2, lm=past.map(x=>ln(x.mh)), lsl=(lm[2]-lm[0])/2;
+  const mxT=Math.max(...dtbs),mnT=Math.min(...dtbs);
+  const posKo=el>mxT?'과거 범위 <b>상단을 넘어섰습니다</b>':el>=mnT?`과거 범위 <b>안</b>에 있으며 최장 기록(${mxT}일)까지 ${mxT-el}일 남았습니다`:`과거 범위 하단까지 ${mnT-el}일 남았습니다`;
+  const posEn=el>mxT?'<b>beyond</b> the longest past bear':el>=mnT?`<b>inside</b> the past range, ${mxT-el} days short of the longest (${mxT} d)`:`${mnT-el} days before the shortest past bear`;
+  document.getElementById('bottomBox').innerHTML=K(
+   `<b>바닥 타이밍.</b> 과거 고점→바닥은 ${dtbs.join(' / ')}일(평균 ${mu.toFixed(0)}일, σ ${sd.toFixed(0)}일). 현재 고점(${ds(T)}) 이후 <b>${el}일</b> 경과로 ${posKo}. 평균 적용 시 바닥일 ${ds(T+Math.round(mu))} (±1σ ${ds(T+Math.round(mu-sd))} ~ ${ds(T+Math.round(mu+sd))}).<br><b>바닥 깊이.</b> 과거 최대 낙폭 ${dds.map(v=>(v*100).toFixed(1)+'%').join(' → ')}는 사이클당 평균 ${(slope*100).toFixed(1)}%p씩 얕아졌습니다. 선형 외삽 시 이번 사이클 ${(dd4*100).toFixed(1)}% → <b>${fmtUSD(cur.pt*(1-dd4))}</b>. 현재 잠정 낙폭 ${(-cur.dd*100).toFixed(1)}%는 외삽치보다 ${((dd4+cur.dd)*100).toFixed(1)}%p 얕습니다.<br><b>수익 체감.</b> 반감기→고점 배수 ${past.map(x=>'×'+x.mh.toFixed(1)).join(' → ')} → 현재 ×${cur.mh.toFixed(2)}. 사이클당 배수는 평균 ${((ex(lsl)-1)*100).toFixed(0)}%씩 변해 왔습니다(표본 3개, 참고용).`,
+   `<b>Bottom timing.</b> Past top→bottom took ${dtbs.join(' / ')} days (mean ${mu.toFixed(0)}, σ ${sd.toFixed(0)}). <b>${el} days</b> have passed since the current top (${ds(T)}) — ${posEn}. Applying the mean gives ${ds(T+Math.round(mu))} (±1σ ${ds(T+Math.round(mu-sd))} to ${ds(T+Math.round(mu+sd))}).<br><b>Bottom depth.</b> Past max drawdowns ${dds.map(v=>(v*100).toFixed(1)+'%').join(' → ')} became ${(-slope*100).toFixed(1)} pp shallower per cycle on average. Linear extrapolation: ${(dd4*100).toFixed(1)}% → <b>${fmtUSD(cur.pt*(1-dd4))}</b>. The current provisional drawdown (${(-cur.dd*100).toFixed(1)}%) is ${((dd4+cur.dd)*100).toFixed(1)} pp shallower than that.<br><b>Diminishing returns.</b> Halving→top multiple ${past.map(x=>'×'+x.mh.toFixed(1)).join(' → ')} → now ×${cur.mh.toFixed(2)}; the multiple changed ${((ex(lsl)-1)*100).toFixed(0)}% per cycle on average (3 samples — indicative only).`);
+}
+function renderMeta(){
+  let r=0,n=0; for(let d=S.d1-365;d<=S.d1;d++){n++; if(S.real[d-S.d0]) r++;}
+  document.getElementById('status').innerHTML=`${K('분석 기준','Analysis as of')} <b>${ds(S.d1)}</b> ${K('종가','close')}`;
+  renderLive();
+  document.getElementById('dataInfo').innerHTML=K(
+    `현재 시계열: <b>${ds(S.d0)} ~ ${ds(S.d1)}</b>. ${S.nImported?`불러온 일봉 ${S.nImported.toLocaleString()}행이 해당 기간의 내장 데이터를 대체 중입니다.`:'최근 1년은 CoinGecko의 00:00 UTC 일봉 종가를 사용하고, 그 이전은 월말 종가와 주요 변곡점 일 종가를 로그 보간합니다. 페이지가 열려 있으면 시세는 15분, 일 종가는 매시간 확인되어 새 종가가 생기면 사이클 분석 전체가 다시 계산됩니다.'}${S.manual?` 수동 입력: ${ds(S.manual[0])} ${fmtUSD(S.manual[1])}.`:''}`,
+    `Current series: <b>${ds(S.d0)} to ${ds(S.d1)}</b>. ${S.nImported?`${S.nImported.toLocaleString()} imported daily rows replace built-in data for that range.`:'The last year uses CoinGecko\'s 00:00 UTC daily closes; earlier history interpolates month-end and key turning-point closes. While the page is open, the price refreshes every 15 minutes and closes are checked hourly; each new close re-runs the whole cycle analysis.'}${S.manual?` Manual: ${ds(S.manual[0])} ${fmtUSD(S.manual[1])}.`:''}`);
+  document.getElementById('foot').innerHTML=K(
+   `시세 데이터: <a href="https://www.coingecko.com/en/api">CoinGecko</a> 제공. 데이터 출처: 월말 종가는 CoinMarketCap/CoinGecko 공개 시세 기준 근사치이며, 2026년 월말 종가는 <a href="https://convextrade.com/metrics/btc/history/2026">ConvexTrade</a>·<a href="https://bgeometrics.com/reports/monthly/2026-10.html">BGeometrics</a>·<a href="https://axeladlerjr.com/charts/bitcoin-monthly-returns/">Axel Adler Jr</a>로 교차 확인, 2026년 11월 시세는 <a href="https://fortune.com/article/price-of-bitcoin-11-11-2026/">Fortune</a>·Yahoo Finance·Deribit 보도치를 사용했습니다. 거래소·시간대(UTC 종가)에 따라 1~3% 차이가 날 수 있습니다.<br><b>면책 고지.</b> 이 사이트는 과거 가격 패턴을 비교하는 정보 제공용 도구이며, 특정 자산의 매수·매도를 권유하거나 투자 자문을 제공하지 않습니다. 모든 전망치는 과거 패턴이 반복된다고 가정한 계산 결과로 미래 수익을 보장하지 않으며, 데이터의 정확성·완전성도 보장하지 않습니다. 투자 판단과 그 결과에 대한 책임은 이용자 본인에게 있습니다.<br><b>개인정보.</b> 이 사이트는 이용자의 개인정보를 수집·저장하지 않으며 쿠키나 분석 도구를 사용하지 않습니다. 화면 설정은 이용자 브라우저에만 저장됩니다. 호스팅은 GitHub Pages가 제공합니다.`,
+   `Price data by <a href="https://www.coingecko.com/en/api">CoinGecko</a>. Month-end closes approximate CoinMarketCap/CoinGecko public prices; 2026 month-end closes cross-checked with <a href="https://convextrade.com/metrics/btc/history/2026">ConvexTrade</a>, <a href="https://bgeometrics.com/reports/monthly/2026-10.html">BGeometrics</a> and <a href="https://axeladlerjr.com/charts/bitcoin-monthly-returns/">Axel Adler Jr</a>; November 2026 prices from <a href="https://fortune.com/article/price-of-bitcoin-11-11-2026/">Fortune</a>, Yahoo Finance and Deribit reports. Values can differ 1–3% by exchange and close time (UTC).<br><b>Disclaimer.</b> This site is an informational tool that compares historical price patterns. It does not recommend buying or selling any asset and does not provide investment advice. All projections are calculations that assume past patterns repeat; they do not guarantee future returns, and data accuracy or completeness is not guaranteed. You are solely responsible for your investment decisions and their outcomes.<br><b>Privacy.</b> This site does not collect or store personal data and uses no cookies or analytics. Display settings stay in your own browser. Hosting is provided by GitHub Pages.`);
+}
+function render(){
+  resolveCycles();
+  const M=computeMetrics(), PJ=projections(M), A=athStats(); LAST_M=M; LAST_A=A;
+  renderMeta(); renderPhase(A); renderForecast(M); renderNow(); renderKPIs(M); legend1(); drawOverlay(PJ); renderScore(M);
+  drawUnderwater(A); renderAth(A); renderDiff(M); drawUSD(PJ); renderProj(PJ); drawRolling(); renderTimeline(); renderMilestones();
+}
+
+/* ============================== EVENTS ============================== */
+const saveUI=()=>LS.set('btcct_ui',{anchor:st.anchor,ymode:st.ymode,win:st.win});
+function segBind(id,key){ document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>{ document.querySelectorAll(`#${id} button`).forEach(x=>x.classList.remove('on')); b.classList.add('on'); st[key]=b.dataset.v; saveUI(); render(); }); }
+segBind('anchorSeg','anchor'); segBind('ySeg','ymode');
+document.getElementById('winSel').onchange=e=>{st.win=e.target.value;saveUI();render()};
+document.getElementById('projTg').onchange=e=>{st.proj=e.target.checked;render()};
+document.getElementById('lagTg').onchange=e=>{st.lag=e.target.checked;render()};
+document.getElementById('ampTg').onchange=e=>{st.amp=e.target.checked;render()};
+document.getElementById('pxBtn').onclick=()=>{ const d=document.getElementById('pxDate').value, v=parseFloat(document.getElementById('pxVal').value);
+  if(!d||!(v>0)){toast(K('날짜와 가격을 입력하세요','Enter a date and price'));return} LS.set('btcct_manual',[dn(d),v]); buildSeries(); render(); toast(`${d} ${fmtUSD(v)} ${K('적용됨','applied')}`); };
+document.getElementById('resetBtn').onclick=()=>{ LS.del('btcct_import'); LS.del('btcct_manual'); LS.del('btcct_cg2'); buildSeries(); render(); toast(K('내장 데이터로 초기화했습니다','Reset to built-in data')); };
+document.getElementById('csvIn').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>{ try{ const pts=parseCSV(rd.result); if(pts.length<30) throw new Error(K('유효 행 부족','too few valid rows')); LS.set('btcct_import',pts); buildSeries(); render(); toast(`${pts.length.toLocaleString()} ${K('행 불러옴','rows loaded')} (${ds(pts[0][0])} ~ ${ds(pts[pts.length-1][0])})`);}catch(err){toast(K('CSV 해석 실패: ','CSV parse failed: ')+err.message)} }; rd.readAsText(f); };
+function splitRow(line,sep){const out=[];let cur='',q=false;for(const ch of line){if(ch==='"'){q=!q;continue}if(ch===sep&&!q){out.push(cur);cur='';continue}cur+=ch}out.push(cur);return out.map(s=>s.trim())}
+function parseDate(s){ s=s.trim(); if(/^\d{10,13}$/.test(s)){const n=+s; return Math.floor((s.length===13?n:n*1000)/DAY)}
+  let m=s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/); if(m) return Math.round(Date.UTC(+m[1],m[2]-1,+m[3])/DAY);
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(m) return Math.round(Date.UTC(+m[3],m[1]-1,+m[2])/DAY);
+  const t=Date.parse(s); return isNaN(t)?NaN:Math.floor(t/DAY); }
+function parseCSV(txt){
+  const lines=txt.split(/\r?\n/).filter(l=>l.trim()); const sep=(lines[0].split(';').length>lines[0].split(',').length)?';':',';
+  const head=splitRow(lines[0],sep).map(h=>h.toLowerCase().replace(/[^a-z ]/g,'').trim());
+  let di=head.findIndex(h=>/^(date|time|timestamp|snappedat|snapped at|timeopen|time open|day)$/.test(h.replace(/\s+/g,' ')));
+  let pi=head.findIndex(h=>h==='close'||h==='close price'||h==='closeusd'); if(pi<0) pi=head.findIndex(h=>h==='price'||h==='adj close'||h.includes('close'));
+  let startRow=1; if(di<0&&pi<0){di=0;pi=1;startRow=isNaN(parseDate(splitRow(lines[0],sep)[0]))?1:0} if(di<0) di=0; if(pi<0) pi=1;
+  const m=new Map(); for(let i=startRow;i<lines.length;i++){const r=splitRow(lines[i],sep); const d=parseDate(r[di]||''); const v=parseFloat((r[pi]||'').replace(/[$,\s]/g,'')); if(isFinite(d)&&v>0) m.set(d,v)}
+  return [...m.entries()].sort((a,b)=>a[0]-b[0]);
+}
+/* ============================== LIVE (CoinGecko public API) ============================== */
+// Price: /simple/price every 15 min · Daily closes: /coins/bitcoin/market_chart?days=365 (00:00 UTC points) hourly.
+// window.__BTCCT_INJECT = {price:{usd,usd_24h_change,last_updated_at}, prices:[[ms,usd],...]} replaces network calls (used by scripts/draft-posts.mjs).
+const API='https://api.coingecko.com/api/v3';
+let LIVE=null, LAST_M=null, CG_ST={state:'init',code:null}, LAST_F=null, LAST_A=null;
+const fmtTime=ts=>{ try{ return new Date(ts).toLocaleString(LANG==='en'?'en-US':'ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) }catch(e){ return '' } };
+function chartToCloses(o){
+  if(!o||!Array.isArray(o.prices)||o.prices.length<2) return [];
+  const P=o.prices, n=P.length, st=+o.startTs, en=+o.endTs, step=(en-st)/(n-1), now=Date.now(), out=[];
+  for(let i=0;i<n;i++){ const pair=Array.isArray(P[i]); const ts=pair?+P[i][0]:st+i*step, v=pair?+P[i][1]:+P[i];
+    if(!(v>0)||!isFinite(ts)) continue; const m=Math.round(ts/DAY); if(m*DAY>now) continue;
+    out.push([m-1, v, Math.abs(ts-m*DAY)]); }
+  return out;
+}
+function mergeCloses(list){ const m=new Map(); list.forEach(([d,v,e])=>{ const c=m.get(d); if(!c||e<c[1]) m.set(d,[v,e]); }); return [...m.entries()].map(([d,[v,e]])=>[d,v,e]).sort((a,b)=>a[0]-b[0]); }
+function cgCloses(){ const live=LS.get('btcct_cg2')||[]; const I=window.__BTCCT_INJECT||{}; const inj=(I.prices?chartToCloses({prices:I.prices}):[]).concat(...(I.charts||[]).map(chartToCloses)); const snap=['d365','d90','d7'].flatMap(k=>chartToCloses(CG_SNAPSHOT[k])); return mergeCloses(snap.concat(live,inj)); }
+function renderLive(){
+  const el=document.getElementById('live'); if(!el) return; const s=CG_ST.state; let cl='',html='';
+  if(s==='live'){ cl='on'; html=`<span class="pulse"></span><span><b>LIVE</b> · CoinGecko · ${K('시세 15분 · 분석 일 종가(UTC)','price 15 min · analysis on daily UTC close')}<br>${K('시세','price')} ${LIVE?fmtTime(LIVE.ts):'—'} · ${K('최근 종가','last close')} ${S&&S.cgRange?ds(S.cgRange[1]):'—'}</span>`; }
+  else if(s==='init'){ cl='warn'; html=`<span class="pulse"></span><span>${K('CoinGecko 시세 불러오는 중…','Loading CoinGecko prices…')}</span>`; }
+  else if(s==='stale'){ cl='warn'; html=`<span class="pulse"></span><span>${K('시세 갱신 지연 — 마지막 값 유지','Price refresh delayed — showing last value')}${LIVE?' · '+fmtTime(LIVE.ts):''}</span>`; }
+  else { cl='off'; html=`<span class="pulse"></span><span>${CG_ST.code==='rate_limited'?K('CoinGecko 요청 한도 — 잠시 후 자동 재시도','CoinGecko rate limit — retrying shortly'):K('실시간 시세를 불러올 수 없음 — 저장된 데이터 사용 중','Live prices unavailable — using saved data')}</span>`; }
+  el.className='live '+cl; el.innerHTML=html;
+}
+async function getJSON(path){ const r=await fetch(API+path,{cache:'no-store'}); if(!r.ok){ const e=new Error('HTTP '+r.status); e.code=r.status===429?'rate_limited':'http'; throw e; } return r.json(); }
+function applyPrice(b){ if(!b||!(b.usd>0)) return; LIVE={price:+b.usd,ch24:+b.usd_24h_change,ts:b.last_updated_at?b.last_updated_at*1000:Date.now()}; CG_ST={state:'live',code:null}; if(LAST_M){ renderKPIs(LAST_M); renderForecast(LAST_M); renderNow(); } renderLive(); }
+function applyDaily(prices){
+  const add=chartToCloses({prices}); if(!add.length) return;
+  const before=cgCloses().slice(-1)[0];
+  const prev=LS.get('btcct_cg2')||[]; LS.set('btcct_cg2',mergeCloses(prev.filter(p=>p[0]>=Math.floor(Date.now()/DAY)-400).concat(add)));
+  const after=cgCloses().slice(-1)[0];
+  if(!before||after[0]!==before[0]||Math.abs(after[1]-before[1])>0.5||!S.cgLive){ buildSeries(); render(); }
+}
+async function pollPrice(){ try{ const j=await getJSON('/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true&include_last_updated_at=true'); applyPrice(j.bitcoin); }catch(e){ CG_ST={state:LIVE?'stale':'off',code:e.code||'http'}; renderLive(); } }
+async function pollDaily(){ try{ const j=await getJSON('/coins/bitcoin/market_chart?vs_currency=usd&days=365'); applyDaily(j.prices); }catch(e){ if(!LIVE){ CG_ST={state:'off',code:e.code||'http'}; renderLive(); } } }
+let lastPoll=0;
+function initLive(){
+  const inj=window.__BTCCT_INJECT;
+  if(inj){ if(inj.prices||inj.charts) { LS.set('btcct_cg2',[]); buildSeries(); render(); } if(inj.price) applyPrice(inj.price); else { CG_ST={state:'off',code:'inject'}; renderLive(); } return; }
+  const tick=()=>{ lastPoll=Date.now(); pollPrice(); };
+  pollDaily(); tick();
+  setInterval(()=>{ if(!document.hidden) tick(); }, 15*60e3);
+  setInterval(()=>{ if(!document.hidden) pollDaily(); }, 60*60e3);
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&Date.now()-lastPoll>15*60e3){ tick(); pollDaily(); } });
+}
+
+/* ============================== SHARE + SUMMARY API ============================== */
+const SITE_URL = (()=>{ try{ return location.origin+location.pathname }catch(e){ return '' } })();
+function shareText(F,lang){
+  const L=lang||LANG, b=F.best, B=F.sc[1], k=(ko,en)=>L==='en'?en:ko;
+  return k(`비트코인 사이클 트래커 📊\n현재가 ${fmtUSD(F.now)} · 고점 대비 ${pct(F.now/price(CY[3].T)-1,1)}\n가장 비슷한 사이클: ${cname(b.c)}(${b.c.yr}) · 유사도 ${b.score.toFixed(0)}\n${cname(b.c)} 반복 시 다음 고점 ${ds(F.date).slice(0,7)} · ${fmtK(B.target)} (${pct(B.ret,0)})\n※ 역사적 유비, 투자 조언 아님`,
+    `Bitcoin Cycle Tracker 📊\nBTC ${fmtUSD(F.now)} · ${pct(F.now/price(CY[3].T)-1,1)} from top\nClosest cycle: ${cname(b.c)} (${b.c.yr}) · score ${b.score.toFixed(0)}\nIf it repeats: next top ${ds(F.date).slice(0,7)} · ${fmtK(B.target)} (${pct(B.ret,0)})\nHistorical analog, not financial advice`);
+}
+function updateShare(F){ const a=document.getElementById('xShare'); if(!a) return; a.href='https://x.com/intent/tweet?text='+encodeURIComponent(shareText(F))+(SITE_URL&&SITE_URL.startsWith('http')?'&url='+encodeURIComponent(SITE_URL+'#'+LANG):''); const t=document.getElementById('xShareT'); if(t) t.textContent=K('공유','Share'); }
+window.BTCCT={
+  summary(){ const F=LAST_F, A=LAST_A, M=LAST_M; if(!F) return null; const cur=CY[3];
+    return { asOfClose:ds(S.d1), close:price(S.d1), price:F.now, live:!!LIVE, ch24:LIVE?LIVE.ch24:null, anchor:st.anchor,
+      top:{date:ds(cur.T),price:price(cur.T)}, fromTop:F.now/price(cur.T)-1, daysSinceTop:S.d1-cur.T, daysSinceHalving:S.d1-cur.H,
+      provBottom:{date:ds(cur.B1),price:price(cur.B1),dd:price(cur.B1)/price(cur.T)-1},
+      best:{cycle:cname(F.best.c),year:F.best.c.yr,score:F.best.score,equivalentDate:ds(F.bp.e),gapToday:ex(F.bp.gapToday)-1,gapAvg:ex(F.best.bias)-1,beta:F.best.beta,lagDays:F.best.lag,dtwLag:F.best.dtw.lag},
+      nextTop:{date:ds(F.date),days:F.days,range:[ds(F.rng[0]),ds(F.rng[1])]},
+      scenarios:F.sc.map(x=>({key:x.key,k:x.k,target:x.target,ret:x.ret,cagr:x.cagr,low:x.low,lowDate:ds(x.lowDay),vsAth:x.vsAth})),
+      ath:{avgTopToAth:A.avg('tr'),progress:A.el/A.avg('tr'),est:{avg:ds(A.est.avg),trend:ds(A.est.trend),fromBottom:ds(A.est.bot)}},
+      scores:M.map(m=>({cycle:cname(m.c),score:m.score,rR:m.rR,rL:m.rL,beta:m.beta,lag:m.lag})),
+      shareKo:shareText(F,'ko'), shareEn:shareText(F,'en') }; },
+  series(){ const F=LAST_F; if(!F) return null; const last=S.d1, bp=F.bp, base=price(bp.e), out={actual:[],scen:{},nextTopDay:last+bp.hs,lastDay:last};
+    for(let d=last-420; d<=last; d+=3) out.actual.push([d,price(d)]); out.actual.push([last,F.now]);
+    F.sc.forEach(x=>{ const arr=[]; for(let h=0; h<=bp.hs+60; h+=4){ const v=ln(price(bp.e+h))-ln(base); if(isFinite(v)) arr.push([last+h,F.now*ex(x.k*v)]); } out.scen[x.key]=arr; });
+    return out; }
+};
+
+function route(){ const h=(location.hash||'').replace('#',''); LANG = h==='en'?'en':'ko'; applyStatic(); render(); }
+window.addEventListener('hashchange',route);
+
+/* ============================== INIT ============================== */
+(function init(){
+  const ui=LS.get('btcct_ui'); if(ui){ Object.assign(st,ui);
+    document.querySelectorAll('#anchorSeg button').forEach(b=>b.classList.toggle('on',b.dataset.v===st.anchor));
+    document.querySelectorAll('#ySeg button').forEach(b=>b.classList.toggle('on',b.dataset.v===st.ymode));
+    document.getElementById('winSel').value=st.win; }
+  const now=new Date(); document.getElementById('pxDate').value=new Date(now.getTime()-now.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+  buildSeries(); route(); initLive();
+})();
+</script>
+</body>
+</html>
