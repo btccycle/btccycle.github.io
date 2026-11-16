@@ -44,6 +44,7 @@ const chg=s.ch24!=null?` (24h ${pc(s.ch24/100)})`:'';
 const url=site.startsWith('http')?site:'';
 const posts={
  ko:[
+  {type:'main', text:`#Bitcoin Cycle Tracker ${s.asOfClose}\n\nBTC ${usd(s.price)}${chg}\n고점 대비 ${pc(s.fromTop)} · 고점 후 ${s.daysSinceTop}일\n\n가장 비슷한 사이클: ${s.best.cycle}(${s.best.year}), ${lagKo} 진행\n반복 시 다음 고점 ${ym(s.nextTop.date)} · ${k(B.target)}\n※ 투자 조언 아님 · 출처: btccycle.github.io`},
   {type:'daily', text:`#비트코인 사이클 트래커 ${s.asOfClose}\n\nBTC ${usd(s.price)}${chg}\n고점 대비 ${pc(s.fromTop)} · 고점 후 ${s.daysSinceTop}일\n\n가장 비슷한 사이클: ${s.best.cycle}(${s.best.year}), ${lagKo} 진행\n반복 시 다음 고점 ${ym(s.nextTop.date)} · ${k(B.target)}\n\n※ 역사적 유비, 투자 조언 아님${url?'\n'+url+'#ko':''}`},
   {type:'insight', text:`과거 고점→신고점 회복: 1177 → 1080 → 847일\n이번 사이클은 ${s.daysSinceTop}일째 (평균의 ${Math.round(s.ath.progress*100)}%)\n\n추세대로면 신고점 회복 ${ym(s.ath.est.trend)}, 평균이면 ${ym(s.ath.est.avg)}\n\n#비트코인 #BTC${url?'\n'+url+'#ko':''}`},
   {type:'thread', parts:[
