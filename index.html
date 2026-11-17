@@ -178,6 +178,16 @@ details.more{background:transparent;border:0;padding:0;margin-top:12px}
 details.more summary{font-size:12.5px;font-weight:500;color:#9cc3f5;padding:6px 2px}
 .kpi:first-child{border-color:#2c3f5c;background:linear-gradient(180deg,#1b2433,#1a1a19)}
 .kpi .v{font-size:23px}
+.dca{background:var(--surface-1);border:1px solid var(--line);border-radius:11px;padding:14px;margin-top:14px}
+.dcahead{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end;margin-bottom:10px}
+.dca .pk{font:600 11px var(--mono);letter-spacing:.12em;color:#7fb0ef}
+.dca h3{margin:4px 0 0;font-size:16px}
+.dcactl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--text-secondary)}
+.dcactl label{display:flex;align-items:center;gap:4px}
+.dcactl input{width:90px}
+.dcactl .usd{color:var(--text-muted);font-family:var(--mono)}
+.dcagrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:1000px){.dcagrid{grid-template-columns:1fr}}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--surface-2);border:1px solid var(--line-2);padding:8px 14px;border-radius:8px;font-size:12.5px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 
 @media (max-width:1000px){.fcgrid,.nowgrid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(3,1fr)}.grid2,.grid2.even{grid-template-columns:1fr}.phase{grid-template-columns:1fr}}
@@ -225,6 +235,20 @@ details.more summary{font-size:12.5px;font-weight:500;color:#9cc3f5;padding:6px 
         <div class="chartbox md"><canvas id="fcChart"></canvas></div>
         <div class="tblwrap"><table id="fcTbl"></table></div>
       </div>
+    </div>
+    <div class="dca">
+      <div class="dcahead">
+        <div><div class="pk" data-i18n="dcaKicker"></div><h3 id="dcaTitle"></h3><p class="sub" id="dcaSub" style="margin:2px 0 0"></p></div>
+        <div class="dcactl">
+          <label><span data-i18n="dcaAmt"></span> <span class="usd">$</span><input type="number" id="dcaAmt" min="1" step="10" value="100"></label>
+          <select id="dcaFreq"><option value="7" data-i18n="dcaW"></option><option value="14" data-i18n="dcaBW"></option><option value="30" data-i18n="dcaM"></option></select>
+        </div>
+      </div>
+      <div class="dcagrid">
+        <div class="tblwrap"><table id="dcaTbl"></table></div>
+        <div><div class="legend" id="dcaLegend"></div><div class="chartbox sm"><canvas id="dcaChart"></canvas></div></div>
+      </div>
+      <p class="disc" id="dcaNote" style="margin-top:6px"></p>
     </div>
     <details class="more"><summary data-i18n="fcMore"></summary><div class="tblwrap" style="margin-top:8px"><table id="fcAll"></table></div></details>
     <p class="disc" id="fcDisc"></p>
@@ -372,6 +396,7 @@ let LANG='ko';
 const K=(ko,en)=>LANG==='en'?en:ko;
 const I18N={
  tagline:['과거 반감기 사이클을 현재 사이클에 겹쳐 가격·시간 괴리와 유사도를 정량 분석합니다.','Overlays past halving cycles on the current one and quantifies price gaps, time gaps and similarity.'],
+ dcaKicker:['적립식 매수 시뮬레이션 (DCA)','DOLLAR-COST AVERAGING'], dcaAmt:['회당 금액','Amount'], dcaW:['매주','Weekly'], dcaBW:['2주마다','Every 2 weeks'], dcaM:['매월','Monthly'],
  secNow:['현재 분석 · 국면','Where we are now'], secFc:['다음 고점 전망','Next-top outlook'], secDetail:['상세 분석','Detailed analysis'], secDetailSub:['기준점·비교 구간을 바꿔가며 사이클을 자세히 비교합니다','Change the anchor and window to compare cycles in depth'], fcMore:['사이클별 투영 · 계산 방식 보기','Per-cycle projections · method'],
  ctlAnchor:['기준점','Align by'], aHalving:['반감기','Halving'], aPrevBottom:['직전 바닥','Prior bottom'], aTop:['사이클 고점','Cycle top'],
  ctlY:['Y축','Y-axis'], yMult:['기준점 대비 배수','Multiple of anchor'], yDd:['고점 대비','% of cycle top'],
@@ -730,7 +755,7 @@ function computeForecast(M){
   return {best,bp,per,Lm,Lm4,decay,kA,kB,sc,now,closeNow,date:last+bp.hs,days,rng:[Math.min(...cands),Math.max(...cands)],cands,t};
 }
 function renderForecast(M){
-  const F=computeForecast(M); LAST_F=F; updateShare(F); const _=0, b=F.best, bp=F.bp, c=b.c, cur=CY[3], an=ANAME();
+  const F=computeForecast(M); LAST_F=F; updateShare(F); setTimeout(()=>renderDCA(F),0); const _=0, b=F.best, bp=F.bp, c=b.c, cur=CY[3], an=ANAME();
   const B=F.sc[1], A=F.sc[0], C=F.sc[2];
   const eq=`${ds(bp.e)}`, eqD=bp.e-anchorDay(c,st.anchor);
   const lagTxt=Math.abs(b.lag)<4?K('거의 동일','about even'):(b.lag>0?K(`${b.lag}일 앞서 진행`,`${b.lag} days ahead`):K(`${-b.lag}일 뒤처져 진행`,`${-b.lag} days behind`));
@@ -798,6 +823,52 @@ function renderNow(){
    </ul>
    <div class="bottom">${K(`요약: 지금은 <b>직전 고점 이후 신고점으로 가는 회복 구간</b>이며, 과거 평균 회복 기간의 ${Math.round(A.el/A.avg('tr')*100)}%를 지나고 있습니다.`,`In short: a <b>recovery phase between the prior top and the next new high</b>, ${Math.round(A.el/A.avg('tr')*100)}% of the way through the average reclaim time.`)}</div>`;
 }
+
+/* ============================== DCA SIMULATOR ============================== */
+const DCA={amt:100,freq:7};
+try{ const v=JSON.parse(localStorage.getItem('btcct_dca')||'null'); if(v){DCA.amt=+v.amt||100;DCA.freq=+v.freq||7;} }catch(e){}
+function computeDCA(F){
+  const bp=F.bp, base=price(bp.e), H=bp.hs, out=[];
+  for(const x of F.sc){
+    const p=h=>F.now*ex(x.k*(ln(price(bp.e+h))-ln(base)));
+    let coins=0, inv=0, n=0; const path=[];
+    for(let h=0; h<=H; h+=DCA.freq){ const px=p(h); if(!(px>0)) continue; coins+=DCA.amt/px; inv+=DCA.amt; n++; path.push([S.d1+h,inv,coins*px]); }
+    const val=coins*x.target, lumpVal=inv*(1+x.ret);
+    // worst paper drawdown along the way (value vs invested)
+    let worst=0; for(let h=0; h<=H; h+=DCA.freq){ const pt=path.find(q=>q[0]===S.d1+h); if(pt){ const r=pt[2]/pt[1]-1; if(r<worst) worst=r; } }
+    out.push({key:x.key,n,inv,coins,val,ret:val/inv-1,avg:inv/coins,lumpVal,lumpRet:x.ret,target:x.target,worst,path,years:H/365.25});
+  }
+  return out;
+}
+function renderDCA(F){
+  const el=document.getElementById('dcaTbl'); if(!el||!F) return;
+  const amtEl=document.getElementById('dcaAmt'), frEl=document.getElementById('dcaFreq');
+  if(document.activeElement!==amtEl) amtEl.value=DCA.amt; frEl.value=String(DCA.freq);
+  const R=computeDCA(F), B=R.find(r=>r.key==='B');
+  const fq={7:K('매주','weekly'),14:K('2주마다','every 2 weeks'),30:K('매월','monthly')}[DCA.freq];
+  document.getElementById('dcaTitle').innerHTML=K(`오늘부터 ${fq} $${DCA.amt.toLocaleString("en-US")}씩 사면, 다음 고점(${ds(F.date).slice(0,7)})에 <span style="color:${SC_COL.B}">${fmtUSD(B.val)}</span> (${pct(B.ret,0)})`,
+    `Buying $${DCA.amt.toLocaleString("en-US")} ${fq} from today → <span style="color:${SC_COL.B}">${fmtUSD(B.val)}</span> (${pct(B.ret,0)}) at the next top (${ds(F.date).slice(0,7)})`);
+  document.getElementById('dcaSub').textContent=K(`${B.n}회 매수 · 총 ${fmtUSD(B.inv)} 투입 · 약 ${B.years.toFixed(1)}년 · 가격 경로는 위 시나리오(${cname(F.best.c)} 유비)를 따름`,
+    `${B.n} buys · ${fmtUSD(B.inv)} invested · ~${B.years.toFixed(1)} years · prices follow the scenarios above (${cname(F.best.c)} analog)`);
+  const nm={A:K('보수','Conservative'),B:K('기준','Base'),C:K('낙관','Optimistic')};
+  el.innerHTML=`<tr><th>${K('시나리오','Scenario')}</th><th>${K('누적 투자금','Invested')}</th><th>${K('고점 평가액','Value at top')}</th><th>${K('수익률','Return')}</th><th>${K('평균 단가','Avg cost')}</th><th>${K('보유 BTC','BTC held')}</th><th>${K('지금 한 번에 투자 시','Lump sum today')}</th></tr>`+
+    R.map(r=>`<tr class="${r.key==='B'?'cur':''}"><td class="name"><span class="sw" style="background:${SC_COL[r.key]}"></span>${nm[r.key]}</td><td>${fmtUSD(r.inv)}</td><td><b>${fmtUSD(r.val)}</b></td><td class="${cls(r.ret)}">${pct(r.ret,0)}</td><td>${fmtUSD(r.avg)}</td><td>${r.coins.toFixed(4)}</td><td>${fmtUSD(r.lumpVal)} <span class="muted small">(${pct(r.lumpRet,0)})</span></td></tr>`).join('')+
+    `<tr><td colspan="7" class="fn">${K(`기준 시나리오에서 고점 전까지 평가액이 투자금보다 가장 낮았던 시점은 <b>${pct(B.worst,0)}</b>입니다. "지금 한 번에 투자"는 같은 총액을 오늘 한 번에 샀을 때의 결과로 비교용입니다.`,`In the base case, the deepest point where value fell below money invested was <b>${pct(B.worst,0)}</b>. "Lump sum today" invests the same total today, for comparison.`)}</td></tr>`;
+  // chart: invested vs value (base)
+  const sets=[{label:K('누적 투자금','Invested'),data:B.path.map(q=>({x:q[0],y:q[1]})),borderColor:'#8f8e86',backgroundColor:'#8f8e86',borderWidth:1.6,stepped:true},
+    ...R.map(r=>({label:`${nm[r.key]} ${K('평가액','value')}`,data:r.path.map(q=>({x:q[0],y:q[2]})),borderColor:SC_COL[r.key],backgroundColor:SC_COL[r.key],borderWidth:r.key==='B'?2.2:1.3,borderDash:r.key==='B'?[]:[5,4]}))];
+  const o=baseOpts(); o.parsing=false; o.normalized=false;
+  o.interaction={mode:'nearest',axis:'x',intersect:false};
+  o.scales.x.ticks.callback=v=>ds(Math.round(v)).slice(2,7).replace('-','.'); o.scales.x.ticks.maxTicksLimit=6;
+  o.scales.y.ticks={callback:v=>fmtK(v)};
+  o.plugins.tooltip.callbacks={title:i=>ds(i[0].raw.x),label:i=>` ${i.dataset.label}: ${fmtUSD(i.raw.y)}`};
+  upsert('dcaChart',sets,o);
+  document.getElementById('dcaLegend').innerHTML=`<span><i style="background:#8f8e86"></i>${K('누적 투자금','Invested')}</span>`+R.map(r=>`<span><i style="background:${SC_COL[r.key]}"></i>${nm[r.key]}</span>`).join('');
+  document.getElementById('dcaNote').textContent=K('수수료·세금·환율은 반영하지 않았습니다. 과거 패턴이 반복된다고 가정한 계산이며, 수익을 보장하지 않고 투자 권유가 아닙니다.','Excludes fees, taxes and FX. Assumes past patterns repeat; not a guarantee of returns and not investment advice.');
+}
+document.addEventListener('input',e=>{ if(e.target&&e.target.id==='dcaAmt'){ const v=+e.target.value; if(v>0){ DCA.amt=v; try{localStorage.setItem('btcct_dca',JSON.stringify(DCA))}catch(_){} renderDCA(LAST_F); } } });
+document.addEventListener('change',e=>{ if(e.target&&e.target.id==='dcaFreq'){ DCA.freq=+e.target.value; try{localStorage.setItem('btcct_dca',JSON.stringify(DCA))}catch(_){} renderDCA(LAST_F); } });
+
 /* ============================== PANELS ============================== */
 function renderPhase(A){
   const cur=CY[3], X1=1500, P=x=>Math.max(0,Math.min(100,x/X1*100)).toFixed(2)+'%';
